@@ -1,4 +1,7 @@
-import type { BaseRef, BaseRefSource } from "../git/worktree-state.js";
+import {
+  isGitRepo, resolveBaseRef, gitCommitsBehindRef, gitMergeBase, gitCommitTime,
+  type BaseRef, type BaseRefSource,
+} from "../git/worktree-state.js";
 
 export type SourceDriftState = "current" | "behind" | "unknown";
 
@@ -79,4 +82,89 @@ function noteFor(d: SourceDrift, daysThreshold: number): string {
     s += `; ${d.base_ref} last fetched ${d.base_ref_age_days}d ago (count may understate; git fetch to confirm)`;
   }
   return s;
+}
+
+// ── Memoized per-repo wrapper ────────────────────────────────────────────────
+
+const DEFAULT_COMMITS = 25;
+const DEFAULT_DAYS = 7;
+
+function envInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/** Whole days between a unix-SECONDS timestamp and `now` (ms). */
+function daysSince(unixSeconds: number | null, now: number): number | null {
+  if (unixSeconds == null) return null;
+  return Math.max(0, Math.floor((now / 1000 - unixSeconds) / 86_400));
+}
+
+interface MemoEntry { value: SourceDrift; expiresAt: number; }
+const memo = new Map<string, MemoEntry>();
+const TTL_MS = 2000;
+
+/** Drop the memoized verdict for a repo (tests; post-fetch recomputation). */
+export function invalidateSourceDrift(repoPath: string): void {
+  memo.delete(repoPath);
+}
+
+/**
+ * Gather git state and classify, memoized 2s per repo path.
+ *
+ * Returns **null** when `CORTEX_SOURCE_DRIFT=0` — distinct from an `unknown`
+ * verdict. Null means "the gate is off, attach nothing"; `unknown` means "the
+ * gate is on and git declined to answer". Callers must not conflate them.
+ *
+ * Needs no graph DB: this is pure git, so unlike freshness it answers on a repo
+ * that has never been indexed — which is the checkout most likely to be sitting
+ * on a dead branch.
+ */
+export function sourceDriftForContext(repoPath: string, now: number = Date.now()): SourceDrift | null {
+  if (process.env.CORTEX_SOURCE_DRIFT === "0") return null;
+
+  const hit = memo.get(repoPath);
+  if (hit && hit.expiresAt > now) return hit.value;
+
+  const isGit = isGitRepo(repoPath);
+  const base = isGit ? resolveBaseRef(repoPath) : null;
+  const commitsBehind = base ? gitCommitsBehindRef(repoPath, base.ref) : null;
+  const forkPoint = base ? gitMergeBase(repoPath, "HEAD", base.ref) : null;
+
+  const value = classifySourceDrift({
+    isGit,
+    base,
+    commitsBehind,
+    forkAgeDays: daysSince(forkPoint ? gitCommitTime(repoPath, forkPoint) : null, now),
+    baseRefAgeDays: daysSince(base ? gitCommitTime(repoPath, base.ref) : null, now),
+    commitsThreshold: envInt("CORTEX_SOURCE_DRIFT_COMMITS", DEFAULT_COMMITS),
+    daysThreshold: envInt("CORTEX_SOURCE_DRIFT_DAYS", DEFAULT_DAYS),
+  });
+  memo.set(repoPath, { value, expiresAt: now + TTL_MS });
+  return value;
+}
+
+type TextResult = { content: Array<{ type: string; text: string }>; [k: string]: unknown };
+
+/**
+ * Attach a source-drift verdict to an MCP text result.
+ *
+ * The structured `source_drift` field is attached for EVERY state, so a
+ * programmatic consumer can apply its own policy without re-shelling git. The
+ * human-visible ⚠ line is appended only for `behind`: `current` and `unknown`
+ * are both silent, and neither is ever rendered as a clean bill of health.
+ *
+ * (Contrast {@link attachFreshness}, which returns the result untouched when
+ * fresh. This one always records its data — the line is thresholded, the data
+ * is not.)
+ */
+export function attachSourceDrift<T extends TextResult>(result: T, d: SourceDrift): T {
+  (result as TextResult).source_drift = d;
+  if (d.state !== "behind") return result;
+  const line = `\n\n⚠ cortex source drift: ${d.note}`;
+  const first = result.content?.find((c) => c.type === "text");
+  if (first) first.text += line;
+  return result;
 }
