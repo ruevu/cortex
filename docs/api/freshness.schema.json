@@ -30,6 +30,46 @@
         },
         "note": {
           "type": "string"
+        },
+        "source_drift": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "enum": [
+                "current",
+                "behind",
+                "unknown"
+              ]
+            },
+            "base_ref": {
+              "type": "string"
+            },
+            "base_source": {
+              "type": "string",
+              "enum": [
+                "upstream",
+                "origin_head",
+                "probe"
+              ]
+            },
+            "commits_behind": {
+              "type": "number"
+            },
+            "fork_age_days": {
+              "type": "number"
+            },
+            "base_ref_age_days": {
+              "type": "number"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "state"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

@@ -15,6 +15,7 @@
 import Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import { freshnessForContext, type Freshness } from "./freshness.js";
+import { sourceDriftForContext, type SourceDrift } from "./source-drift.js";
 import { readIndexMeta, type IndexMeta } from "../graph/index-meta.js";
 import { resolveGraphDbForRead, resolveCortexDbPath } from "../db/resolve-path.js";
 
@@ -31,6 +32,9 @@ export function computeEtag(project: string | null, meta: IndexMeta | null): str
 export interface HttpFreshness {
   verdict: Freshness;
   etag: string;
+  /** Checkout-vs-base verdict. Absent when the gate is off, or when the
+   *  project is not in the registry (no root path to ask git about). */
+  source_drift?: SourceDrift;
 }
 
 /** Compute the verdict + ETag for a resolved project name (null/unknown →
@@ -61,5 +65,8 @@ export function httpFreshnessFor(
   } finally {
     handle?.close();
   }
-  return { verdict, etag: computeEtag(project, meta) };
+  // Source drift is pure git — it needs neither the graph handle nor the meta
+  // baseline, so it is computed off rootPath alone and survives a DB that
+  // failed to open above.
+  return { verdict, etag: computeEtag(project, meta), source_drift: sourceDriftForContext(rootPath) ?? undefined };
 }
