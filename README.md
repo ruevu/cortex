@@ -303,7 +303,7 @@ The same graph and decision surface is available from the terminal via the `cort
 | `cortex graph` | `query` (Cypher), `sql` (raw) | Advanced graph queries |
 | `cortex eval` | `run`, `baseline`, `report` | Run the eval harness |
 
-Meta commands: `cortex tour` (guided walkthrough), `cortex help <topic>`, `cortex install`, `cortex setup frames`, `cortex freshness`. Run `cortex --help` or `cortex <namespace> --help` for the full reference, and `--version` for the version.
+Meta commands: `cortex tour` (guided walkthrough), `cortex help <topic>`, `cortex install`, `cortex setup frames`, `cortex freshness`, `cortex source-drift` (warns when this checkout is behind its base ref; silent otherwise). Run `cortex --help` or `cortex <namespace> --help` for the full reference, and `--version` for the version.
 
 **Output formatting.** List commands accept `--format=table|json|plain` (`--limit` / `--offset` for paging). On an interactive terminal, output is styled — colored table headers with dimmed secondary columns, red `✗` errors with a dim `→` hint, colored help, and an animated braille spinner during `cortex index`. **When output isn't a TTY** (pipes, redirection, `--format json`/`plain`), it is plain, ANSI-free, and stable for scripting. Color follows the standard `NO_COLOR` opt-out plus the `--color`/`--no-color` flags and `CORTEX_COLOR`/`CORTEX_NO_COLOR`/`CORTEX_ASCII` env vars (see [Environment variables](#environment-variables)); a non-UTF-8 locale falls back to ASCII glyphs.
 

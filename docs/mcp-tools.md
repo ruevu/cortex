@@ -108,6 +108,24 @@ no longer matches HEAD + working tree:
 
 See [graph-storage.md](architecture/graph-storage.md) for the freshness model.
 
+The same tools also carry a **`source_drift`** field — the other axis. Freshness
+asks whether the index is current for this checkout; source drift asks whether
+the **checkout** is current for its base ref (`@{upstream}`, else `origin/HEAD`,
+else a verified `origin/main`/`origin/master` probe):
+
+- `current` — at or near the base; no line emitted.
+- `behind` — ≥25 commits behind **or** forked ≥7 days ago
+  (`CORTEX_SOURCE_DRIFT_COMMITS` / `_DAYS`); appends a `⚠ cortex source drift`
+  line naming the count, the fork age, and — when the base ref is itself stale —
+  how long ago it was fetched.
+- `unknown` — git could not resolve a base ref. **Silent**, and never a
+  reassurance: an absent line does not mean the checkout is current.
+
+The field is attached for every state so consumers can apply their own policy;
+only the ⚠ line is thresholded. Remedy is `git fetch` + rebase/merge, never a
+reindex. Gate: `CORTEX_SOURCE_DRIFT=0`. Details:
+[source-drift.md](architecture/source-drift.md).
+
 ### Symbol-miss routing
 
 A **symbol lookup** that resolves nothing — `search_graph`, `get_code_snippet`,
