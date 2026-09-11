@@ -23,7 +23,7 @@ import { runBriefCommand } from "./commands/brief.js";
 import { runDoctorCommand } from "./commands/doctor.js";
 
 const NAMESPACES = ["code", "decision", "graph", "index", "eval", "todo"];
-const META_COMMANDS = ["tour", "help", "install", "setup", "freshness", "reconcile", "staleness", "brief", "doctor"];
+const META_COMMANDS = ["tour", "help", "install", "setup", "freshness", "reconcile", "staleness", "source-drift", "brief", "doctor"];
 
 async function main(): Promise<void> {
   const argv = parseArgv(process.argv.slice(1)); // strip node arg too; arg 0 is the tsx/script

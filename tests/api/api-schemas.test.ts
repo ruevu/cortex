@@ -51,7 +51,7 @@ describe("api-schemas", () => {
   it("SourceDriftSchema accepts a behind verdict", () => {
     expect(SourceDriftSchema.safeParse({
       state: "behind", base_ref: "origin/main", base_source: "origin_head",
-      commits_behind: 18, fork_age_days: 12, base_ref_age_days: 10,
+      commits_behind: 18, fork_age_days: 12, last_fetch_days: 10,
       note: "18 commit(s) behind origin/main — forked 12d ago",
     }).success).toBe(true);
   });

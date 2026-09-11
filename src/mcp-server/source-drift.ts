@@ -1,6 +1,6 @@
 import {
   isGitRepo, resolveBaseRef, gitCommitsBehindRef, gitMergeBase, gitCommitTime,
-  type BaseRef, type BaseRefSource,
+  gitLastFetchTime, type BaseRef, type BaseRefSource,
 } from "../git/worktree-state.js";
 
 export type SourceDriftState = "current" | "behind" | "unknown";
@@ -23,7 +23,11 @@ export interface SourceDrift {
   base_source?: BaseRefSource;
   commits_behind?: number;
   fork_age_days?: number;
-  base_ref_age_days?: number;
+  /** Days since this repo last fetched. Absent when it never has. This is
+   *  FETCH_HEAD's mtime — genuinely "when did we last ask the remote" — not
+   *  the base ref's commit age, which says nothing about how current the ref
+   *  is in a slow-moving repo. */
+  last_fetch_days?: number;
   note?: string;
 }
 
@@ -32,7 +36,8 @@ export interface ClassifySourceDriftInput {
   base: BaseRef | null;
   commitsBehind: number | null;
   forkAgeDays: number | null;
-  baseRefAgeDays: number | null;
+  /** Days since this repo last fetched (FETCH_HEAD mtime), or null if never. */
+  lastFetchDays: number | null;
   commitsThreshold: number;
   daysThreshold: number;
 }
@@ -59,13 +64,25 @@ export function classifySourceDrift(i: ClassifySourceDriftInput): SourceDrift {
     commits_behind: i.commitsBehind,
     fork_age_days: i.forkAgeDays,
   };
-  if (i.baseRefAgeDays != null) d.base_ref_age_days = i.baseRefAgeDays;
+  if (i.lastFetchDays != null) d.last_fetch_days = i.lastFetchDays;
 
   // Two thresholds, OR'd: either alone calibrates to a single repo's commit
   // rate. A fast repo drifts 50 commits in two days; a slow one drifts 5 over
   // three weeks. Count-only misses the second, age-only misses the first.
-  const byCount = i.commitsBehind >= i.commitsThreshold;
-  const byAge = i.forkAgeDays >= i.daysThreshold;
+  //
+  // BOTH are gated on actually being behind. When HEAD is level with the base,
+  // merge-base IS HEAD, so fork_age degenerates into "how long since anyone
+  // committed" — and a quiet repo would earn a permanent warning with nothing
+  // to fetch or rebase. Verified before this guard: a level checkout whose tip
+  // was 30 days old reported `0 commit(s) behind origin/main`. That is the
+  // cry-wolf failure, and a channel that cries wolf once is ignored forever.
+  //
+  // It also disarms a footgun: `>= 0` is universally true, so a
+  // CORTEX_SOURCE_DRIFT_COMMITS=0 set in the belief that it disables the axis
+  // would otherwise mark every repo behind — the exact opposite of the intent.
+  const isBehind = i.commitsBehind > 0;
+  const byCount = isBehind && i.commitsBehind >= i.commitsThreshold;
+  const byAge = isBehind && i.forkAgeDays >= i.daysThreshold;
   if (byCount || byAge) {
     d.state = "behind";
     d.note = noteFor(d, i.daysThreshold);
@@ -75,11 +92,11 @@ export function classifySourceDrift(i: ClassifySourceDriftInput): SourceDrift {
 
 function noteFor(d: SourceDrift, daysThreshold: number): string {
   let s = `${d.commits_behind} commit(s) behind ${d.base_ref} — forked ${d.fork_age_days}d ago`;
-  // The base ref only moves on fetch, so an old one makes the count a FLOOR,
-  // not a measurement. Reuses the fork-age threshold rather than introducing a
-  // third constant to tune.
-  if (d.base_ref_age_days != null && d.base_ref_age_days >= daysThreshold) {
-    s += `; ${d.base_ref} last fetched ${d.base_ref_age_days}d ago (count may understate; git fetch to confirm)`;
+  // Remote-tracking refs only move on fetch, so a long-unfetched repo makes the
+  // count a FLOOR rather than a measurement. Reuses the fork-age threshold
+  // instead of introducing a third constant to tune.
+  if (d.last_fetch_days != null && d.last_fetch_days >= daysThreshold) {
+    s += `; last fetched ${d.last_fetch_days}d ago (count may understate; git fetch to confirm)`;
   }
   return s;
 }
@@ -143,7 +160,7 @@ export function sourceDriftForContext(repoPath: string, now: number = Date.now()
     base,
     commitsBehind,
     forkAgeDays: daysSince(forkPoint ? gitCommitTime(repoPath, forkPoint) : null, now),
-    baseRefAgeDays: daysSince(base ? gitCommitTime(repoPath, base.ref) : null, now),
+    lastFetchDays: daysSince(gitLastFetchTime(repoPath), now),
     commitsThreshold: envInt("CORTEX_SOURCE_DRIFT_COMMITS", DEFAULT_COMMITS),
     daysThreshold: envInt("CORTEX_SOURCE_DRIFT_DAYS", DEFAULT_DAYS),
   });

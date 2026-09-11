@@ -30,15 +30,24 @@ exception — and the probability rises with every day a thread lives.
 
 Base ref, first hit wins:
 
-1. `rev-parse --abbrev-ref @{upstream}` — a configured upstream is the most
-   specific statement of intent.
-2. `symbolic-ref -q --short refs/remotes/origin/HEAD`.
+1. `rev-parse --abbrev-ref @{upstream}` — but **only when it names something
+   other than this branch's own namesake**. `git push -u` (which this repo's
+   workflow prescribes for every release) makes `feature/x` track
+   `origin/feature/x`, a *publishing* target rather than an integration base;
+   measuring against it reports 0 behind however far `origin/main` has moved.
+   A genuinely different upstream (`feature/x` tracking `origin/develop`) is
+   honoured as the more specific statement of intent it actually is.
+2. `symbolic-ref -q --short refs/remotes/origin/HEAD` — the integration branch.
 3. A **verified** probe: `rev-parse --verify -q origin/main`, then
    `origin/master`, used only if the ref actually resolves.
 
 Then `rev-list --count HEAD..<base>`, the age of `merge-base(HEAD, <base>)`, and
-the age of the `<base>` tip (a last-fetch proxy). All local plumbing, **no fetch
-on a read path**.
+`FETCH_HEAD`'s mtime — genuinely *when this repo last asked the remote*, not the
+base tip's commit age, which in a slow-moving repo says nothing about how
+current the view is. `FETCH_HEAD` is per-worktree, so both the worktree's own
+copy and the shared common-dir copy are checked and the newer wins; otherwise
+the answer would depend on which checkout happened to run `git fetch`. All local
+plumbing, **no fetch on a read path**.
 
 Step 3 is the only step approaching inference, and it is deliberately a probe
 rather than a guess: `origin/HEAD` is set only by `git clone` or an explicit
@@ -54,7 +63,15 @@ through to `origin/HEAD` rather than stranding the signal.
 ## Thresholds
 
 Fires when `commits_behind >= CORTEX_SOURCE_DRIFT_COMMITS` (default 25) **or**
-`fork_age_days >= CORTEX_SOURCE_DRIFT_DAYS` (default 7).
+`fork_age_days >= CORTEX_SOURCE_DRIFT_DAYS` (default 7) — and, in both cases,
+only when `commits_behind > 0`.
+
+That last clause is load-bearing. When HEAD is level with the base, `merge-base`
+*is* HEAD, so fork age degenerates into "how long since anyone committed" and a
+quiet repo would earn a permanent warning with nothing to fetch or rebase. It
+also disarms a footgun: `>= 0` is universally true, so a
+`CORTEX_SOURCE_DRIFT_COMMITS=0` set in the belief that it disables the axis would
+otherwise mark every repo behind.
 
 Two thresholds, OR'd, because either alone calibrates to one repo's commit rate:
 a fast repo drifts 50 commits in two days, a slow one drifts 5 over three weeks,
@@ -86,7 +103,7 @@ policy without re-shelling git.
 | MCP read tools | the eight `freshnessAware` tools get a `source_drift` field plus a ⚠ line when behind |
 | `cortex source-drift` | prints the line when behind, nothing otherwise; exit 0 always |
 | SessionStart hook | shells the above, in **both** the indexed and not-indexed branches |
-| `/api/freshness` | optional `source_drift` object, additive (no `CONTRACT_VERSION` bump) |
+| `/api/freshness` | optional `source_drift` object, additive (no `CONTRACT_VERSION` bump), plus an `X-Cortex-Source-Drift` header so the verdict survives a 304 |
 
 It needs no graph DB, which is why the hook can emit it on an **unindexed**
 checkout where freshness and knowledge drift cannot speak at all — and a fresh
@@ -102,7 +119,7 @@ Gate: `CORTEX_SOURCE_DRIFT=0`.
 
 | file | role |
 |---|---|
-| [`src/git/worktree-state.ts`](../../src/git/worktree-state.ts) | `resolveBaseRef`, `gitCommitsBehindRef`, `gitMergeBase`, `gitCommitTime` |
+| [`src/git/worktree-state.ts`](../../src/git/worktree-state.ts) | `resolveBaseRef`, `gitCommitsBehindRef`, `gitMergeBase`, `gitCommitTime`, `gitLastFetchTime` |
 | [`src/mcp-server/source-drift.ts`](../../src/mcp-server/source-drift.ts) | classifier + memoized resolver + `attachSourceDrift` |
 | [`src/cli/commands/source-drift.ts`](../../src/cli/commands/source-drift.ts) | `cortex source-drift` |
 | [`hooks/check-index.sh`](../../hooks/check-index.sh) | SessionStart banner, both branches |

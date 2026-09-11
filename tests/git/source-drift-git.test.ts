@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  resolveBaseRef, gitCommitsBehindRef, gitMergeBase, gitCommitTime,
+  resolveBaseRef, gitCommitsBehindRef, gitMergeBase, gitCommitTime, gitLastFetchTime,
 } from "../../src/git/worktree-state.js";
 
 function repo(): string {
@@ -89,6 +89,82 @@ describe("resolveBaseRef", () => {
 
   it("returns null outside a git repo", () => {
     expect(resolveBaseRef(mkdtempSync(join(tmpdir(), "cortex-nogit-")))).toBeNull();
+  });
+
+  // `git push -u` — which this repo's own workflow prescribes for every release
+  // — makes feature/x track origin/feature/x. That is a PUBLISHING target, not
+  // an integration base: measuring against it reports 0 behind however far main
+  // has moved. Caught live: a branch 40 commits behind main read `current`.
+  it("SKIPS an upstream that is just this branch's own published copy", () => {
+    const root = repo();
+    fakeRemoteBranch(root, "main");
+    execFileSync("git", ["-C", root, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+    execFileSync("git", ["-C", root, "checkout", "-q", "-b", "feature/x"]);
+    fakeRemoteBranch(root, "feature/x");
+    setUpstream(root, "feature/x", { withFetchRefspec: true });
+    // Sanity: git itself resolves the upstream — we are choosing to ignore it.
+    expect(execFileSync("git", ["-C", root, "rev-parse", "--abbrev-ref", "@{upstream}"], { encoding: "utf8" }).trim())
+      .toBe("origin/feature/x");
+    expect(resolveBaseRef(root)).toEqual({ ref: "origin/main", source: "origin_head" });
+  });
+
+  it("still honours an upstream that names a DIFFERENT branch", () => {
+    const root = repo();
+    fakeRemoteBranch(root, "main");
+    fakeRemoteBranch(root, "develop");
+    execFileSync("git", ["-C", root, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+    execFileSync("git", ["-C", root, "checkout", "-q", "-b", "feature/y"]);
+    setUpstream(root, "develop", { withFetchRefspec: true });
+    expect(resolveBaseRef(root)).toEqual({ ref: "origin/develop", source: "upstream" });
+  });
+});
+
+describe("gitLastFetchTime", () => {
+  it("returns null when the repo has never fetched", () => {
+    expect(gitLastFetchTime(repo())).toBeNull();
+  });
+
+  it("reports the FETCH_HEAD mtime, NOT the base ref's commit age", () => {
+    const root = repo();
+    // A tip commit backdated 30 days, then a fetch that happens right now.
+    const old = Math.floor(Date.now() / 1000) - 30 * 86_400;
+    writeFileSync(join(root, "b.txt"), "2\n");
+    execFileSync("git", ["-C", root, "add", "."]);
+    execFileSync("git", ["-C", root, "commit", "-q", "--no-gpg-sign", "-m", "old"], {
+      env: { ...process.env, GIT_AUTHOR_DATE: `${old} +0000`, GIT_COMMITTER_DATE: `${old} +0000` },
+    });
+    execFileSync("git", ["-C", root, "config", "remote.origin.url", "."]);
+    execFileSync("git", ["-C", root, "fetch", "-q", "origin"]);
+
+    const fetched = gitLastFetchTime(root)!;
+    expect(fetched).toBeGreaterThan(Math.floor(Date.now() / 1000) - 120);
+    // The distinction the old implementation collapsed: the tip is a month old,
+    // the fetch is seconds old, and only the latter is "how current is my view
+    // of the remote".
+    expect(fetched - gitCommitTime(root, "HEAD")!).toBeGreaterThan(29 * 86_400);
+  });
+
+  it("returns null outside a git repo", () => {
+    expect(gitLastFetchTime(mkdtempSync(join(tmpdir(), "cortex-nofetch-")))).toBeNull();
+  });
+
+  // FETCH_HEAD is per-worktree, so a fetch run from the MAIN checkout leaves a
+  // linked worktree's copy absent. Reading only the worktree's own would make
+  // the answer depend on which checkout ran `git fetch` — and in Mesh, where
+  // worktrees are manufactured per thread and rarely fetch themselves, that is
+  // the common case.
+  it("sees a fetch performed in the main checkout from a linked worktree", () => {
+    const root = repo();
+    execFileSync("git", ["-C", root, "config", "remote.origin.url", "."]);
+    execFileSync("git", ["-C", root, "fetch", "-q", "origin"]);
+    const wt = mkdtempSync(join(tmpdir(), "cortex-linked-")) + "/wt";
+    execFileSync("git", ["-C", root, "worktree", "add", "-q", "-b", "side", wt]);
+
+    // The worktree itself has never fetched...
+    const own = execFileSync("git", ["-C", wt, "rev-parse", "--git-path", "FETCH_HEAD"], { encoding: "utf8" }).trim();
+    expect(existsSync(own.startsWith("/") ? own : join(wt, own))).toBe(false);
+    // ...but the repo has, and that is what the question means.
+    expect(gitLastFetchTime(wt)).toBeGreaterThan(Math.floor(Date.now() / 1000) - 120);
   });
 });
 

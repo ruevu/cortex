@@ -6,7 +6,7 @@ const base = {
   base: { ref: "origin/main", source: "origin_head" as const },
   commitsBehind: 0,
   forkAgeDays: 0,
-  baseRefAgeDays: 0,
+  lastFetchDays: 0,
   commitsThreshold: 25,
   daysThreshold: 7,
 };
@@ -38,10 +38,10 @@ describe("classifySourceDrift", () => {
   });
 
   it("adds the fetch-age caveat only when the base ref is itself stale", () => {
-    const stale = classifySourceDrift({ ...base, commitsBehind: 30, baseRefAgeDays: 10 });
+    const stale = classifySourceDrift({ ...base, commitsBehind: 30, lastFetchDays: 10 });
     expect(stale.note).toContain("last fetched 10d ago");
     expect(stale.note).toContain("count may understate");
-    const fresh = classifySourceDrift({ ...base, commitsBehind: 30, baseRefAgeDays: 1 });
+    const fresh = classifySourceDrift({ ...base, commitsBehind: 30, lastFetchDays: 1 });
     expect(fresh.note).not.toContain("last fetched");
   });
 
@@ -80,6 +80,35 @@ describe("classifySourceDrift", () => {
       commitsThreshold: 100, daysThreshold: 90,
     });
     expect(d.state).toBe("current");
+  });
+
+  // ── Regressions from the whole-branch review ─────────────────────────────
+
+  // When HEAD is level with the base, merge-base IS HEAD, so fork_age becomes
+  // "how long since anyone committed" — and a quiet repo would earn a permanent
+  // ⚠ with nothing to fetch or rebase. Caught live: a level checkout with a
+  // 30-day-old tip reported "0 commit(s) behind origin/main".
+  it("never fires on the age axis when nothing is actually behind", () => {
+    const d = classifySourceDrift({ ...base, commitsBehind: 0, forkAgeDays: 30 });
+    expect(d.state).toBe("current");
+    expect(d.note).toBeUndefined();
+  });
+
+  it("still fires on the age axis when genuinely behind in a slow repo", () => {
+    const d = classifySourceDrift({ ...base, commitsBehind: 3, forkAgeDays: 30 });
+    expect(d.state).toBe("behind");
+  });
+
+  // `>= 0` is universally true, so a threshold of 0 — a plausible attempt to
+  // disable the axis — would otherwise mark every repo on earth behind.
+  it("a zero commit threshold does not mark a level checkout behind", () => {
+    const d = classifySourceDrift({ ...base, commitsBehind: 0, commitsThreshold: 0 });
+    expect(d.state).toBe("current");
+  });
+
+  it("a zero commit threshold still fires once actually behind", () => {
+    const d = classifySourceDrift({ ...base, commitsBehind: 1, commitsThreshold: 0 });
+    expect(d.state).toBe("behind");
   });
 
   it("records where the base ref came from", () => {

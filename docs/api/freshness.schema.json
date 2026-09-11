@@ -59,7 +59,7 @@
             "fork_age_days": {
               "type": "number"
             },
-            "base_ref_age_days": {
+            "last_fetch_days": {
               "type": "number"
             },
             "note": {

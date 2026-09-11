@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { statSync } from "node:fs";
 
 function git(repo: string, args: string[]): string | null {
   try {
@@ -45,8 +46,21 @@ export interface BaseRef { ref: string; source: BaseRefSource; }
 /**
  * The ref this checkout should be judged against, or null when git cannot say.
  *
- * Order: a configured `@{upstream}` (the most specific statement of intent),
- * then `origin/HEAD`, then a VERIFIED probe of origin/main + origin/master.
+ * Order:
+ *   1. `@{upstream}`, but ONLY when it names something other than this branch's
+ *      own namesake (see below).
+ *   2. `origin/HEAD` — the integration branch.
+ *   3. A VERIFIED probe of `origin/main` then `origin/master`.
+ *
+ * WHY UPSTREAM IS NOT SIMPLY PREFERRED. `git push -u` — which this repo's own
+ * workflow prescribes for every release — sets `feature/x`'s upstream to
+ * `origin/feature/x`. That ref is a PUBLISHING target, not an integration base:
+ * measuring against it reports 0 behind no matter how far `origin/main` has
+ * moved. Verified: a branch 40 commits behind main read `current` under the
+ * naive ordering, silencing the signal on exactly the case it exists to catch.
+ * So a self-named upstream is skipped, while a genuinely different one
+ * (`feature/x` tracking `origin/develop`) is honoured as the more specific
+ * statement of intent it actually is.
  *
  * The probe is a probe, not a guess: `origin/HEAD` is only set by `git clone`
  * or an explicit `git remote set-head`, so a repo created locally and later
@@ -56,7 +70,7 @@ export interface BaseRef { ref: string; source: BaseRefSource; }
  */
 export function resolveBaseRef(repo: string): BaseRef | null {
   const up = git(repo, ["rev-parse", "--abbrev-ref", "@{upstream}"])?.trim();
-  if (up) return { ref: up, source: "upstream" };
+  if (up && !isOwnNamesake(repo, up)) return { ref: up, source: "upstream" };
 
   const head = git(repo, ["symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD"])?.trim();
   if (head) return { ref: head, source: "origin_head" };
@@ -67,6 +81,54 @@ export function resolveBaseRef(repo: string): BaseRef | null {
     }
   }
   return null;
+}
+
+/** True when `upstreamRef` ("origin/feature/x") is just this branch's own
+ *  published copy — i.e. a push target rather than something to measure against. */
+function isOwnNamesake(repo: string, upstreamRef: string): boolean {
+  const branch = gitBranch(repo);
+  if (!branch) return false;
+  const slash = upstreamRef.indexOf("/");
+  if (slash < 0) return upstreamRef === branch;
+  return upstreamRef.slice(slash + 1) === branch;
+}
+
+/**
+ * When this repo last fetched, in unix SECONDS, from `FETCH_HEAD`'s mtime —
+ * or null when it has never fetched.
+ *
+ * NOT the base ref's commit time. A slow-moving repo fetched a minute ago has a
+ * month-old tip commit, and reporting that as "last fetched a month ago" is a
+ * fabrication of exactly the kind this signal exists to prevent. `--git-path`
+ * resolves through a linked worktree to the common git dir, where FETCH_HEAD
+ * actually lives.
+ */
+export function gitLastFetchTime(repo: string): number | null {
+  // FETCH_HEAD is PER-WORKTREE: a fetch run from the main checkout writes the
+  // common dir's copy and leaves a linked worktree's absent. Checking only one
+  // makes the answer depend on which checkout happened to run `git fetch`, so
+  // take the newer of both — that is "when did this repo last ask the remote",
+  // which is the question regardless of where it was asked from.
+  const candidates = [
+    git(repo, ["rev-parse", "--git-path", "FETCH_HEAD"])?.trim(),
+    (() => {
+      const common = git(repo, ["rev-parse", "--git-common-dir"])?.trim();
+      return common ? `${common}/FETCH_HEAD` : undefined;
+    })(),
+  ];
+
+  let newest: number | null = null;
+  for (const p of candidates) {
+    if (!p) continue;
+    const abs = p.startsWith("/") ? p : `${repo}/${p}`;
+    try {
+      const t = Math.floor(statSync(abs).mtimeMs / 1000);
+      if (newest == null || t > newest) newest = t;
+    } catch { /* absent — this checkout never fetched */ }
+  }
+  // null = never fetched anywhere. Unknowable, NOT "long ago": the caller must
+  // omit the caveat rather than invent a duration.
+  return newest;
 }
 
 /** Commits on `ref` that HEAD does not have — how far BEHIND the checkout is.

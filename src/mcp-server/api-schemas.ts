@@ -348,7 +348,7 @@ export const SourceDriftSchema = z.object({
   base_source: z.enum(["upstream", "origin_head", "probe"]).optional(),
   commits_behind: z.number().optional(),
   fork_age_days: z.number().optional(),
-  base_ref_age_days: z.number().optional(),
+  last_fetch_days: z.number().optional(),
   note: z.string().optional(),
 });
 export type SourceDriftResponse = z.infer<typeof SourceDriftSchema>;
