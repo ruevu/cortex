@@ -94,6 +94,25 @@ build + transactional-publish write path makes mid-session refresh safe. See
 [docs/architecture/graph-storage.md](docs/architecture/graph-storage.md).
 Gates: `CORTEX_FRESHNESS=0` (signal), `CORTEX_AUTO_REFRESH=0` (refresh).
 
+### Source-drift signal — is this CHECKOUT current?
+
+Freshness answers "is the index current for this checkout?". It says nothing
+about whether the **checkout** is current for its base. A `⚠ cortex source
+drift` line means this worktree is far enough behind `origin/main` (or its
+upstream) to matter — the answers you are reading may be true of a tree nobody
+ships from. The remedy is `git fetch` + rebase/merge, **never reindex**.
+
+**An absent line is not a clean bill of health.** The signal is silent whenever
+git cannot resolve a base ref (no upstream, no `origin/HEAD`, no remote), and
+silence is never a reassurance — it never reports "current" off a failed git
+call. It is also silent below its thresholds: `CORTEX_SOURCE_DRIFT_COMMITS`
+(default 25) **or** `CORTEX_SOURCE_DRIFT_DAYS` (default 7) trips it.
+
+On demand: `cortex source-drift` (silent unless behind; needs no index, so it
+answers on an unindexed checkout where `cortex freshness` cannot). Also fires
+once at SessionStart. Gate off: `CORTEX_SOURCE_DRIFT=0`. Details:
+[source-drift.md](docs/architecture/source-drift.md).
+
 ### Briefing signal — study-time pre-edit context
 
 `get_code_snippet`/`trace_path` add a briefing headline when the symbol is

@@ -459,8 +459,14 @@ export function startViewerServer(
 
       // ── /api/freshness ──
       if (pathname === "/api/freshness") {
-        const { verdict, etag } = httpFreshnessFor(project ?? null, registry);
-        respond(res, FreshnessResponseSchema, { version: CONTRACT_VERSION, ...verdict }, { req, freshness: verdict, etag, headers: cors });
+        const { verdict, etag, source_drift } = httpFreshnessFor(project ?? null, registry);
+        // `source_drift` is a sibling field, not part of the ETag: the ETag is
+        // the INDEX baseline (cache identity, D-tszm's two-signal model), and
+        // source drift can change with a `git fetch` that republishes nothing.
+        // It is ALSO passed as `sourceDrift` so respond() stamps it as a header
+        // — without that, a consumer sending If-None-Match gets a bodiless 304
+        // and never observes drift changing until an unrelated reindex.
+        respond(res, FreshnessResponseSchema, { version: CONTRACT_VERSION, ...verdict, source_drift }, { req, freshness: verdict, etag, sourceDrift: source_drift, headers: cors });
         return;
       }
 

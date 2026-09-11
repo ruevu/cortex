@@ -1,0 +1,192 @@
+import {
+  isGitRepo, resolveBaseRef, gitCommitsBehindRef, gitMergeBase, gitCommitTime,
+  gitLastFetchTime, type BaseRef, type BaseRefSource,
+} from "../git/worktree-state.js";
+
+export type SourceDriftState = "current" | "behind" | "unknown";
+
+/**
+ * Checkout-vs-base verdict — the second staleness axis.
+ *
+ * Sibling to {@link Freshness}, deliberately never merged with it: freshness
+ * measures index↔checkout, this measures checkout↔base ref. A perfectly fresh
+ * index over a worktree 170 commits behind `origin/main` is green on the first
+ * axis and rotten on this one, which is the whole reason this type exists.
+ *
+ * NOTE `commits_behind` here means "behind the BASE REF", which is NOT what the
+ * same-named field on `Freshness` means ("commits since the INDEX"). The two
+ * live in separate nested objects precisely so the collision cannot bite.
+ */
+export interface SourceDrift {
+  state: SourceDriftState;
+  base_ref?: string;
+  base_source?: BaseRefSource;
+  commits_behind?: number;
+  fork_age_days?: number;
+  /** Days since this repo last fetched. Absent when it never has. This is
+   *  FETCH_HEAD's mtime — genuinely "when did we last ask the remote" — not
+   *  the base ref's commit age, which says nothing about how current the ref
+   *  is in a slow-moving repo. */
+  last_fetch_days?: number;
+  note?: string;
+}
+
+export interface ClassifySourceDriftInput {
+  isGit: boolean;
+  base: BaseRef | null;
+  commitsBehind: number | null;
+  forkAgeDays: number | null;
+  /** Days since this repo last fetched (FETCH_HEAD mtime), or null if never. */
+  lastFetchDays: number | null;
+  commitsThreshold: number;
+  daysThreshold: number;
+}
+
+/**
+ * Pure source-drift classifier — no I/O.
+ *
+ * Every path git cannot answer returns `unknown`, and `unknown` is SILENT. The
+ * signal has exactly two things it can say: "you are demonstrably behind" or
+ * nothing. It must never report `current` on the strength of a git call that
+ * failed — that would re-create, one level down, the exact green-but-wrong
+ * failure this signal exists to kill.
+ */
+export function classifySourceDrift(i: ClassifySourceDriftInput): SourceDrift {
+  if (!i.isGit) return { state: "unknown", note: "not a git repository" };
+  if (!i.base) return { state: "unknown", note: "no base ref resolvable (no upstream, no origin/HEAD, no origin/main|master)" };
+  if (i.commitsBehind == null) return { state: "unknown", note: `cannot count commits against ${i.base.ref}` };
+  if (i.forkAgeDays == null) return { state: "unknown", note: `fork point against ${i.base.ref} is unresolvable` };
+
+  const d: SourceDrift = {
+    state: "current",
+    base_ref: i.base.ref,
+    base_source: i.base.source,
+    commits_behind: i.commitsBehind,
+    fork_age_days: i.forkAgeDays,
+  };
+  if (i.lastFetchDays != null) d.last_fetch_days = i.lastFetchDays;
+
+  // Two thresholds, OR'd: either alone calibrates to a single repo's commit
+  // rate. A fast repo drifts 50 commits in two days; a slow one drifts 5 over
+  // three weeks. Count-only misses the second, age-only misses the first.
+  //
+  // BOTH are gated on actually being behind. When HEAD is level with the base,
+  // merge-base IS HEAD, so fork_age degenerates into "how long since anyone
+  // committed" — and a quiet repo would earn a permanent warning with nothing
+  // to fetch or rebase. Verified before this guard: a level checkout whose tip
+  // was 30 days old reported `0 commit(s) behind origin/main`. That is the
+  // cry-wolf failure, and a channel that cries wolf once is ignored forever.
+  //
+  // It also disarms a footgun: `>= 0` is universally true, so a
+  // CORTEX_SOURCE_DRIFT_COMMITS=0 set in the belief that it disables the axis
+  // would otherwise mark every repo behind — the exact opposite of the intent.
+  const isBehind = i.commitsBehind > 0;
+  const byCount = isBehind && i.commitsBehind >= i.commitsThreshold;
+  const byAge = isBehind && i.forkAgeDays >= i.daysThreshold;
+  if (byCount || byAge) {
+    d.state = "behind";
+    d.note = noteFor(d, i.daysThreshold);
+  }
+  return d;
+}
+
+function noteFor(d: SourceDrift, daysThreshold: number): string {
+  let s = `${d.commits_behind} commit(s) behind ${d.base_ref} — forked ${d.fork_age_days}d ago`;
+  // Remote-tracking refs only move on fetch, so a long-unfetched repo makes the
+  // count a FLOOR rather than a measurement. Reuses the fork-age threshold
+  // instead of introducing a third constant to tune.
+  if (d.last_fetch_days != null && d.last_fetch_days >= daysThreshold) {
+    s += `; last fetched ${d.last_fetch_days}d ago (count may understate; git fetch to confirm)`;
+  }
+  return s;
+}
+
+// ── Memoized per-repo wrapper ────────────────────────────────────────────────
+
+const DEFAULT_COMMITS = 25;
+const DEFAULT_DAYS = 7;
+
+function envInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/** Whole days between a unix-SECONDS timestamp and `now` (ms).
+ *
+ *  FLOOR, not round — so this can read one day lower than `git log --format=%cr`
+ *  for the same commit (11.7 days → "11d" here, "12 days ago" from git). That is
+ *  the deliberate direction: flooring makes the signal fire slightly less
+ *  readily, matching the rule that it speaks only when demonstrably behind. */
+function daysSince(unixSeconds: number | null, now: number): number | null {
+  if (unixSeconds == null) return null;
+  return Math.max(0, Math.floor((now / 1000 - unixSeconds) / 86_400));
+}
+
+interface MemoEntry { value: SourceDrift; expiresAt: number; }
+const memo = new Map<string, MemoEntry>();
+const TTL_MS = 2000;
+
+/** Drop the memoized verdict for a repo (tests; post-fetch recomputation). */
+export function invalidateSourceDrift(repoPath: string): void {
+  memo.delete(repoPath);
+}
+
+/**
+ * Gather git state and classify, memoized 2s per repo path.
+ *
+ * Returns **null** when `CORTEX_SOURCE_DRIFT=0` — distinct from an `unknown`
+ * verdict. Null means "the gate is off, attach nothing"; `unknown` means "the
+ * gate is on and git declined to answer". Callers must not conflate them.
+ *
+ * Needs no graph DB: this is pure git, so unlike freshness it answers on a repo
+ * that has never been indexed — which is the checkout most likely to be sitting
+ * on a dead branch.
+ */
+export function sourceDriftForContext(repoPath: string, now: number = Date.now()): SourceDrift | null {
+  if (process.env.CORTEX_SOURCE_DRIFT === "0") return null;
+
+  const hit = memo.get(repoPath);
+  if (hit && hit.expiresAt > now) return hit.value;
+
+  const isGit = isGitRepo(repoPath);
+  const base = isGit ? resolveBaseRef(repoPath) : null;
+  const commitsBehind = base ? gitCommitsBehindRef(repoPath, base.ref) : null;
+  const forkPoint = base ? gitMergeBase(repoPath, "HEAD", base.ref) : null;
+
+  const value = classifySourceDrift({
+    isGit,
+    base,
+    commitsBehind,
+    forkAgeDays: daysSince(forkPoint ? gitCommitTime(repoPath, forkPoint) : null, now),
+    lastFetchDays: daysSince(gitLastFetchTime(repoPath), now),
+    commitsThreshold: envInt("CORTEX_SOURCE_DRIFT_COMMITS", DEFAULT_COMMITS),
+    daysThreshold: envInt("CORTEX_SOURCE_DRIFT_DAYS", DEFAULT_DAYS),
+  });
+  memo.set(repoPath, { value, expiresAt: now + TTL_MS });
+  return value;
+}
+
+type TextResult = { content: Array<{ type: string; text: string }>; [k: string]: unknown };
+
+/**
+ * Attach a source-drift verdict to an MCP text result.
+ *
+ * The structured `source_drift` field is attached for EVERY state, so a
+ * programmatic consumer can apply its own policy without re-shelling git. The
+ * human-visible ⚠ line is appended only for `behind`: `current` and `unknown`
+ * are both silent, and neither is ever rendered as a clean bill of health.
+ *
+ * (Contrast {@link attachFreshness}, which returns the result untouched when
+ * fresh. This one always records its data — the line is thresholded, the data
+ * is not.)
+ */
+export function attachSourceDrift<T extends TextResult>(result: T, d: SourceDrift): T {
+  (result as TextResult).source_drift = d;
+  if (d.state !== "behind") return result;
+  const line = `\n\n⚠ cortex source drift: ${d.note}`;
+  const first = result.content?.find((c) => c.type === "text");
+  if (first) first.text += line;
+  return result;
+}

@@ -15,6 +15,7 @@ import { DecisionsRepository } from "../decisions/repository.js";
 import { DecisionLinksRepository } from "../decisions/links-repository.js";
 import { GraphStore } from "../graph/store.js";
 import { freshnessForContext, attachFreshness } from "./freshness.js";
+import { sourceDriftForContext, attachSourceDrift } from "./source-drift.js";
 import { attachBriefing } from "./briefing-attach.js";
 import { beginIndexSignal } from "../index-signal.js";
 
@@ -601,6 +602,14 @@ export function registerTool<A, R>(
     if (options.freshnessAware && result && typeof result === "object" && "content" in (result as object)) {
       const f = freshnessForContext({ repoPath: ctx.repoPath, graphDb: ctx.graphDb, canonical: ctx.canonical });
       result = attachFreshness(result as any, f) as R;
+      // Second axis: is the CHECKOUT itself behind its base ref? Independent of
+      // freshness — a perfectly fresh index over a worktree 170 commits behind
+      // origin/main is green on that axis and rotten on this one — and
+      // independently gated. Reads ctx.repoPath, i.e. the CHECKOUT axis, per
+      // D-d5k3: the verdict must describe the branch the user is actually on.
+      // Needs no graphDb, so it is the cheaper of the two calls.
+      const d = sourceDriftForContext(ctx.repoPath);
+      if (d) result = attachSourceDrift(result as any, d) as R;
     }
     if (options.briefAware && result && typeof result === "object" && "content" in (result as object)) {
       result = attachBriefing(result as any, ctx, briefTargetFromArgs(args as Record<string, unknown>)) as R;

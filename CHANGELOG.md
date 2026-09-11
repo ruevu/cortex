@@ -18,6 +18,57 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.0] — 2026-09-11
+
+### Added
+
+- **Source drift — a second staleness axis.** Cortex measured index↔checkout and
+  nothing else, so a perfectly fresh index over a worktree 170 commits behind
+  `origin/main` reported stale answers as current state with every indicator
+  green. A `⚠ cortex source drift` line now fires when the **checkout itself**
+  is behind its base ref, on the eight freshness-aware read tools (as a
+  `source_drift` field plus the line), the new `cortex source-drift` command,
+  and the SessionStart hook.
+- **Base ref resolves as `@{upstream}` → `origin/HEAD` → a *verified* probe** of
+  `origin/main`/`origin/master`. The probe asks git whether the ref exists
+  rather than assuming a default branch name: `origin/HEAD` is set only by
+  `git clone` or an explicit `git remote set-head`, so a locally-created repo
+  legitimately lacks it. (`@{upstream}` alone would have been silent on every
+  Mesh worktree — those branches are never pushed.) An upstream that is merely
+  this branch's **own published copy** is skipped: `git push -u` makes
+  `feature/x` track `origin/feature/x`, which reports 0 behind however far
+  `origin/main` has moved.
+- **Two thresholds, OR'd:** ≥25 commits behind **or** a fork point ≥7 days old
+  (`CORTEX_SOURCE_DRIFT_COMMITS` / `CORTEX_SOURCE_DRIFT_DAYS`). Either alone
+  calibrates to one repo's commit rate. When the base ref is itself stale the
+  line says how long ago it was fetched, since an unfetched ref makes the count
+  a floor rather than a measurement — read from `FETCH_HEAD`'s mtime, which is
+  genuinely when the remote was last consulted, rather than the base tip's
+  commit age. Both axes additionally require being behind at all, so a quiet
+  repo level with its base never warns. Gate off with `CORTEX_SOURCE_DRIFT=0`.
+- **The hook emits it on unindexed checkouts too.** The signal is pure git and
+  needs no graph, so it is the one staleness signal available to a checkout that
+  has never been indexed — which is the likeliest dead tree of all.
+- **`source_drift` on `/api/freshness`** — additive and optional, so existing
+  consumers stay valid and no `CONTRACT_VERSION` bump is owed. Not folded into
+  the ETag: that is the index baseline, and source drift can change after a
+  `git fetch` that republishes nothing. Also stamped as an
+  **`X-Cortex-Source-Drift`** header, mirroring `X-Cortex-Freshness`, so a
+  consumer sending `If-None-Match` still observes drift across a bodiless 304.
+- New [`docs/architecture/source-drift.md`](docs/architecture/source-drift.md),
+  which names Cortex's three staleness axes (freshness, knowledge drift, source
+  drift) explicitly for the first time.
+
+### Notes
+
+- **Silence is never a reassurance.** Every state git cannot determine is
+  `unknown` and emits nothing; the signal never reports "current" off a failed
+  git call. An absent line is *not* a clean bill of health.
+- The `reconcile` verdict enum value `drift` is deliberately **not** renamed —
+  it is a live wire contract. "Knowledge drift" is prose only.
+- Day counts floor rather than round, so they can read one lower than
+  `git log --format=%cr`; that direction makes the signal fire less readily.
+
 ## [2.3.3] — 2026-09-01
 
 ### Added
@@ -2719,6 +2770,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.0]: https://github.com/ruevu/cortex/releases/tag/v2.4.0
 [2.3.3]: https://github.com/ruevu/cortex/releases/tag/v2.3.3
 [2.3.2]: https://github.com/ruevu/cortex/releases/tag/v2.3.2
 [2.3.1]: https://github.com/ruevu/cortex/releases/tag/v2.3.1

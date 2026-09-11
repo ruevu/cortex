@@ -34,6 +34,34 @@ describe("respond", () => {
     expect(res.headers["Content-Type"]).toBe("application/json");
   });
 
+  // The ETag is the INDEX baseline, so a cached consumer gets a bodiless 304
+  // and would never observe drift changing — drift moves on a `git fetch`,
+  // which republishes nothing. Freshness escapes that via its header; source
+  // drift needs the same escape or the response field is unreachable in
+  // exactly the polling case Mesh uses.
+  it("stamps X-Cortex-Source-Drift, and it SURVIVES a 304", () => {
+    const drift = { state: "behind" as const, base_ref: "origin/main", commits_behind: 18 };
+
+    const ok = fakeRes();
+    respond(ok as any, Schema, { version: 1, ok: true }, baseCtx({ sourceDrift: drift }));
+    expect(ok.headers["X-Cortex-Source-Drift"]).toBe("behind");
+
+    const notModified = fakeRes();
+    respond(notModified as any, Schema, { version: 1, ok: true }, baseCtx({
+      sourceDrift: drift,
+      req: { headers: { "if-none-match": '"1:cortex:abc"' } } as any,
+    }));
+    expect(notModified.statusCode).toBe(304);
+    expect(notModified.body).toBe("");
+    expect(notModified.headers["X-Cortex-Source-Drift"]).toBe("behind");
+  });
+
+  it("omits the source-drift header entirely when there is no verdict", () => {
+    const res = fakeRes();
+    respond(res as any, Schema, { version: 1, ok: true }, baseCtx());
+    expect(res.headers["X-Cortex-Source-Drift"]).toBeUndefined();
+  });
+
   it("emits 304 with no body when If-None-Match matches the ETag", () => {
     const res = fakeRes();
     const ctx = baseCtx({ req: { headers: { "if-none-match": '"1:cortex:abc"' } } as any });

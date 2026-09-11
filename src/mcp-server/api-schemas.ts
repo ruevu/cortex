@@ -337,6 +337,22 @@ export const StoryIdParamSchema = z.string().min(1).max(200);
 export const FreshnessStateSchema = z.enum([
   "fresh", "stale:commits", "stale:dirty", "stale:both", "empty", "unknown",
 ]);
+/** The OTHER staleness axis: is the checkout itself behind its base ref?
+ *  Nested rather than flattened — its `commits_behind` counts distance from the
+ *  BASE REF, while the sibling field on the freshness body counts distance from
+ *  the INDEX. Separate objects make that collision structurally impossible. */
+export const SourceDriftStateSchema = z.enum(["current", "behind", "unknown"]);
+export const SourceDriftSchema = z.object({
+  state: SourceDriftStateSchema,
+  base_ref: z.string().optional(),
+  base_source: z.enum(["upstream", "origin_head", "probe"]).optional(),
+  commits_behind: z.number().optional(),
+  fork_age_days: z.number().optional(),
+  last_fetch_days: z.number().optional(),
+  note: z.string().optional(),
+});
+export type SourceDriftResponse = z.infer<typeof SourceDriftSchema>;
+
 export const FreshnessResponseSchema = z.object({
   version: Version,
   state: FreshnessStateSchema,
@@ -344,6 +360,10 @@ export const FreshnessResponseSchema = z.object({
   dirty: z.boolean().optional(),
   indexed_at: z.string().optional(),
   note: z.string().optional(),
+  // Additive + optional: existing consumers stay valid, so no CONTRACT_VERSION
+  // bump is owed (D-tszm — contract version is decoupled from package semver,
+  // and this breaks nothing).
+  source_drift: SourceDriftSchema.optional(),
 });
 export type FreshnessResponse = z.infer<typeof FreshnessResponseSchema>;
 

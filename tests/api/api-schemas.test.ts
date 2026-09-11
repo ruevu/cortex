@@ -12,6 +12,7 @@ import {
   AdaptedTodoSchema,
   AdaptedStorySchema,
   FreshnessResponseSchema,
+  SourceDriftSchema,
   HealthResponseSchema,
   ProjectParamSchema,
   DecisionIdParamSchema,
@@ -45,6 +46,31 @@ describe("api-schemas", () => {
   it("FreshnessResponseSchema accepts a verdict", () => {
     expect(FreshnessResponseSchema.safeParse({ version: 1, state: "fresh", indexed_at: "t" }).success).toBe(true);
     expect(FreshnessResponseSchema.safeParse({ version: 1, state: "nope" }).success).toBe(false);
+  });
+
+  it("SourceDriftSchema accepts a behind verdict", () => {
+    expect(SourceDriftSchema.safeParse({
+      state: "behind", base_ref: "origin/main", base_source: "origin_head",
+      commits_behind: 18, fork_age_days: 12, last_fetch_days: 10,
+      note: "18 commit(s) behind origin/main — forked 12d ago",
+    }).success).toBe(true);
+  });
+
+  it("SourceDriftSchema rejects a state outside the enum", () => {
+    expect(SourceDriftSchema.safeParse({ state: "sideways" }).success).toBe(false);
+  });
+
+  it("FreshnessResponseSchema carries an optional source_drift", () => {
+    expect(FreshnessResponseSchema.safeParse({
+      version: 1, state: "fresh",
+      source_drift: { state: "behind", base_ref: "origin/main", commits_behind: 18 },
+    }).success).toBe(true);
+  });
+
+  // Additive-and-optional is what makes this a minor rather than a break:
+  // every existing consumer's body must still validate untouched.
+  it("FreshnessResponseSchema still accepts a body with NO source_drift", () => {
+    expect(FreshnessResponseSchema.safeParse({ version: 1, state: "fresh" }).success).toBe(true);
   });
 
   it("ProjectsResponseSchema + FramesResponseSchema + AggregatesResponseSchema + FileEdgesResponseSchema accept current shapes", () => {

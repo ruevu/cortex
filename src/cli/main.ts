@@ -18,11 +18,12 @@ import { setupVenv } from "../frame-extraction/venv.js";
 import { runFreshnessCommand } from "./commands/freshness.js";
 import { runReconcileCommand } from "./commands/reconcile.js";
 import { runStalenessCommand } from "./commands/staleness.js";
+import { runSourceDriftCommand } from "./commands/source-drift.js";
 import { runBriefCommand } from "./commands/brief.js";
 import { runDoctorCommand } from "./commands/doctor.js";
 
 const NAMESPACES = ["code", "decision", "graph", "index", "eval", "todo"];
-const META_COMMANDS = ["tour", "help", "install", "setup", "freshness", "reconcile", "staleness", "brief", "doctor"];
+const META_COMMANDS = ["tour", "help", "install", "setup", "freshness", "reconcile", "staleness", "source-drift", "brief", "doctor"];
 
 async function main(): Promise<void> {
   const argv = parseArgv(process.argv.slice(1)); // strip node arg too; arg 0 is the tsx/script
@@ -64,6 +65,10 @@ async function main(): Promise<void> {
   }
   if (argv.namespace === "staleness") {
     runStalenessCommand(argv.flags);
+    return;
+  }
+  if (argv.namespace === "source-drift") {
+    runSourceDriftCommand();
     return;
   }
   if (argv.namespace === "brief") {

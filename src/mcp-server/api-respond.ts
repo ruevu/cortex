@@ -13,6 +13,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ZodTypeAny } from "zod";
 import type { Freshness } from "./freshness.js";
+import type { SourceDrift } from "./source-drift.js";
 import { CONTRACT_VERSION } from "./api-schemas.js";
 
 /** True when a response-schema mismatch must throw rather than log+send. */
@@ -28,6 +29,9 @@ export interface RespondCtx {
   req: IncomingMessage;
   freshness: Freshness;
   etag: string;
+  /** Checkout-vs-base verdict, stamped as `X-Cortex-Source-Drift` when present
+   *  so it survives a 304. Optional: routes with no repo to ask about omit it. */
+  sourceDrift?: SourceDrift;
   /** Override the strict decision (tests). Defaults to `isStrict()`. */
   strict?: boolean;
   /** Extra headers (e.g. CORS) to merge in. */
@@ -58,6 +62,11 @@ export function respond<T>(
   const baseHeaders: Record<string, string> = {
     "X-Cortex-API-Version": String(CONTRACT_VERSION),
     "X-Cortex-Freshness": ctx.freshness.state,
+    // Source drift rides a header for the same reason freshness does: the ETag
+    // is the INDEX baseline, so a caching consumer sending If-None-Match gets a
+    // bodiless 304 and would never observe drift changing. Drift moves on a
+    // `git fetch`, which republishes nothing and so cannot shift the ETag.
+    ...(ctx.sourceDrift ? { "X-Cortex-Source-Drift": ctx.sourceDrift.state } : {}),
     ETag: ctx.etag,
     "X-Content-Type-Options": "nosniff",
     ...(ctx.headers ?? {}),
