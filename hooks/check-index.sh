@@ -280,6 +280,18 @@ EOF
                 printf '%s\n' "$STALENESS"
             fi
         fi
+        # Source drift (checkout <-> base ref) — the OTHER staleness axis. The
+        # freshness line answers "is the index current for this HEAD?"; this
+        # answers "is this HEAD current for its base?". A worktree resumed after
+        # a week is near-certain to be addressing a dead tree while every index
+        # signal reads green. Silent unless demonstrably behind; degrade-safe
+        # (no binary, or an older CLI, yields no output and no line).
+        if [ -n "$CORTEX_BIN" ]; then
+            SOURCE_DRIFT="$(cd "$REPO" && "$CORTEX_BIN" source-drift 2>/dev/null)"
+            if [ -n "$SOURCE_DRIFT" ]; then
+                printf '%s\n' "$SOURCE_DRIFT"
+            fi
+        fi
         ;;
     not-indexed)
         cat <<'EOF'
@@ -295,6 +307,17 @@ After indexing, use:
   - search_graph, get_code_snippet, trace_path, decision({action:"why"})
   - search_code for text patterns with structural context
 EOF
+        # Source drift fires here too, and this is where it matters most: an
+        # unindexed checkout has no graph, so no freshness or staleness signal
+        # can speak — yet a freshly-created worktree on a long-merged branch is
+        # the likeliest dead tree of all. Source drift is pure git and needs no
+        # index, so it is the one signal still able to answer.
+        if [ -n "$CORTEX_BIN" ]; then
+            SOURCE_DRIFT="$(cd "$REPO" && "$CORTEX_BIN" source-drift 2>/dev/null)"
+            if [ -n "$SOURCE_DRIFT" ]; then
+                printf '%s\n' "$SOURCE_DRIFT"
+            fi
+        fi
         ;;
     unknown)
         cat <<'EOF'
