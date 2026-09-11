@@ -20,8 +20,9 @@ import { TodoLinksRepository } from "./todos/links-repository.js";
 import { StoriesRepository, StoryStepsRepository } from "./stories/repository.js";
 import type { WireNode } from "./events/types.js";
 import { newUlid } from "./events/ulid.js";
-import { canonicalRepoPath } from "./db/git-root.js";
+import { presenceActivityEvent, showFocusEvent, showAdvanceEvent } from "./events/show-events.js";
 import { resolveBoundProject } from "./mcp-server/bound-project.js";
+import { setIndexSignalEmitter } from "./index-signal.js";
 
 const dbPath = resolveCortexDbPath();
 const eventsDbPath = process.env.CORTEX_EVENTS_DB_PATH || ".cortex/events.db";
@@ -203,31 +204,9 @@ const { port, httpServer } = await startViewerServer(
   storiesRepo,
   storyStepsRepo,
   {
-    homeRoot: canonicalRepoPath(cwd),
-    emit: (p) => bus.emit({
-      id: newUlid(),
-      kind: "presence.activity",
-      actor: "claude",
-      created_at: Date.now(),
-      project_id: indexerProject ?? "",
-      payload: { session_id: p.session_id, workspace: p.workspace, activity: p.activity, refs: p.refs },
-    }),
-    emitFocus: (p) => bus.emit({
-      id: newUlid(),
-      kind: "show.focus",
-      actor: "claude",
-      created_at: Date.now(),
-      project_id: indexerProject ?? "",
-      payload: { refs: p.refs, note: p.note },
-    }),
-    emitAdvance: (p) => bus.emit({
-      id: newUlid(),
-      kind: "show.advance",
-      actor: "claude",
-      created_at: Date.now(),
-      project_id: indexerProject ?? "",
-      payload: { story_id: p.story_id, step: p.step },
-    }),
+    emit: (p, t) => bus.emit(presenceActivityEvent(p, t, newUlid(), Date.now())),
+    emitFocus: (p, t) => bus.emit(showFocusEvent(p, t, newUlid(), Date.now())),
+    emitAdvance: (p, t) => bus.emit(showAdvanceEvent(p, t, newUlid(), Date.now())),
   },
   () => createServer(indexerProject, bus),
 );
@@ -249,6 +228,10 @@ if (port > 0 && httpServer) {
       }
     },
   });
+  // The two index paths emit through a module singleton (src/index-signal.ts);
+  // this is the only place it is installed, and the only place that knows a ws
+  // handle exists. Everywhere else the emit is a no-op.
+  setIndexSignalEmitter((msg) => wsHandle?.broadcastIndex(msg));
   process.stderr.write(`Cortex viewer: http://localhost:${port}/viewer (WS at /ws)\n`);
 } else {
   // startViewerServer has already logged the specific bind failure. Surface a

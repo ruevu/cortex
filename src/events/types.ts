@@ -27,6 +27,9 @@ export interface EventEnvelope {
 export interface PresenceActivityPayload {
   session_id: string;
   workspace: string;
+  /** Resolved checkout root the beacon belongs to. Optional: events persisted
+   *  before 2026-08-31 have none and still replay through the backfill window. */
+  repo_path?: string;
   activity: 'studied' | 'edited' | 'traced' | 'consulted';
   refs: string[];
 }
@@ -34,11 +37,15 @@ export interface PresenceActivityPayload {
 export interface ShowFocusPayload {
   refs: string[];
   note?: string;
+  /** Resolved checkout root; see PresenceActivityPayload.repo_path. */
+  repo_path?: string;
 }
 
 export interface ShowAdvancePayload {
   story_id: string;
   step: number;          // 1-based
+  /** Resolved checkout root; see PresenceActivityPayload.repo_path. */
+  repo_path?: string;
 }
 
 /**
@@ -217,6 +224,27 @@ export type ProjectionDelta =
   | { ulid: string; entity: ProjectionEntity; op: 'remove'; data: { id: string } };
 
 /**
+ * Index lifecycle — TRANSIENT. Broadcast to every connected client and never
+ * written to events.db: an index run is operational, fires on every
+ * save-triggered refresh, and is of no interest a minute later. It carries
+ * `repo_path` because the ws server binds one `projectId` at startup while
+ * index runs concern arbitrary checkouts — a linked worktree is a different
+ * cortex project from the sidecar's home repo, and the client matches on path.
+ */
+export interface IndexSignalMsg {
+  type: 'index';
+  phase: 'started' | 'completed' | 'failed';
+  repo_path: string;
+  project: string | null;
+  branch: string | null;
+  /** Absent on `started` and `failed`, and best-effort on `completed`: the
+   *  cache-import path knows no node/edge counts, and the detached background
+   *  child reports nothing back at all. `elapsed_ms` is always measured. */
+  stats?: { nodes?: number; edges?: number; frames?: number; elapsed_ms: number };
+  error?: string;
+}
+
+/**
  * Messages sent from server to client over the WebSocket at `/ws`.
  *
  * See the "WebSocket server" section of `docs/architecture/graph-ui.md`.
@@ -239,7 +267,8 @@ export type ServerMsg =
       head_ulid: string | null;
     }
   | { type: 'pong' }
-  | { type: 'error'; code: string; message: string };
+  | { type: 'error'; code: string; message: string }
+  | IndexSignalMsg;
 
 /** Messages sent from client to server over the WebSocket at `/ws`. */
 export type ClientMsg =
