@@ -96,7 +96,12 @@ function envInt(name: string, fallback: number): number {
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
-/** Whole days between a unix-SECONDS timestamp and `now` (ms). */
+/** Whole days between a unix-SECONDS timestamp and `now` (ms).
+ *
+ *  FLOOR, not round — so this can read one day lower than `git log --format=%cr`
+ *  for the same commit (11.7 days → "11d" here, "12 days ago" from git). That is
+ *  the deliberate direction: flooring makes the signal fire slightly less
+ *  readily, matching the rule that it speaks only when demonstrably behind. */
 function daysSince(unixSeconds: number | null, now: number): number | null {
   if (unixSeconds == null) return null;
   return Math.max(0, Math.floor((now / 1000 - unixSeconds) / 86_400));
