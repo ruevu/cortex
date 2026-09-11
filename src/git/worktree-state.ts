@@ -38,6 +38,61 @@ export function gitCommitsBehind(repo: string, base: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Where a base ref came from — recorded so a reader can judge the number. */
+export type BaseRefSource = "upstream" | "origin_head" | "probe";
+export interface BaseRef { ref: string; source: BaseRefSource; }
+
+/**
+ * The ref this checkout should be judged against, or null when git cannot say.
+ *
+ * Order: a configured `@{upstream}` (the most specific statement of intent),
+ * then `origin/HEAD`, then a VERIFIED probe of origin/main + origin/master.
+ *
+ * The probe is a probe, not a guess: `origin/HEAD` is only set by `git clone`
+ * or an explicit `git remote set-head`, so a repo created locally and later
+ * given a remote legitimately lacks it. We ask git whether the ref exists and
+ * use it only if it resolves. Null means UNKNOWABLE — callers must stay silent
+ * rather than assume a default branch name we never confirmed.
+ */
+export function resolveBaseRef(repo: string): BaseRef | null {
+  const up = git(repo, ["rev-parse", "--abbrev-ref", "@{upstream}"])?.trim();
+  if (up) return { ref: up, source: "upstream" };
+
+  const head = git(repo, ["symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD"])?.trim();
+  if (head) return { ref: head, source: "origin_head" };
+
+  for (const cand of ["origin/main", "origin/master"]) {
+    if (git(repo, ["rev-parse", "--verify", "-q", cand]) !== null) {
+      return { ref: cand, source: "probe" };
+    }
+  }
+  return null;
+}
+
+/** Commits on `ref` that HEAD does not have — how far BEHIND the checkout is.
+ *  (Contrast {@link gitCommitsBehind}, which counts the other direction, against
+ *  the index baseline.) null when git cannot resolve the ref. */
+export function gitCommitsBehindRef(repo: string, ref: string): number | null {
+  const out = git(repo, ["rev-list", "--count", `HEAD..${ref}`]);
+  if (out === null) return null;
+  const n = parseInt(out.trim(), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Fork point of two revs, or null when they share no history. */
+export function gitMergeBase(repo: string, a: string, b: string): string | null {
+  const out = git(repo, ["merge-base", a, b]);
+  return out?.trim() || null;
+}
+
+/** Commit time of `rev` in unix SECONDS, or null when unresolvable. */
+export function gitCommitTime(repo: string, rev: string): number | null {
+  const out = git(repo, ["log", "-1", "--format=%ct", rev]);
+  if (out === null) return null;
+  const n = parseInt(out.trim(), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
 /** Current branch name, or null when detached / not a git repo. */
 export function gitBranch(repoPath: string): string | null {
   const out = git(repoPath, ["rev-parse", "--abbrev-ref", "HEAD"]);
