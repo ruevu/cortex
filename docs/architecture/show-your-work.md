@@ -458,10 +458,10 @@ Where spotlight diverges hardest from presence:
   `frameSet`, then takes `Math.max(dimLevel, spotDim)` against the existing
   single-frame `computeFocusProgress` dim — the two dims compose rather than
   one overriding the other.
-- **`D-`/`T-` refs ring decision/todo dots**, matched against **both** the
-  display id (`D-12`/`T-3`, seq form) and the canonical id
-  (`decisionDisplayId(dec)`/`String(dec.id)`) — a ref in either form lights
-  the dot. Non-member decision/todo dots recede to `globalAlpha = 0.45`
+- **`D-`/`T-` refs ring decision/todo dots**, matched by `spotlightHas` against
+  **both** the canonical id (`String(rec.id)` — what the dot is now labelled
+  with) and the legacy display-seq form (`D-12`/`T-3`) — a ref in either form
+  lights the dot. Non-member decision/todo dots recede to `globalAlpha = 0.45`
   (whole-dot: fill, leaders, ring, pill) while a spotlight is active;
   members and the no-spotlight case render at full alpha.
 - **Unresolved refs surface verbatim** on the caption card

@@ -91,14 +91,21 @@ export function createEngine({ canvas, store, callbacks = {}, isLight: isLightFn
   function todoDotRGB()           { return [250, 204, 21]; }
   function todoTextRGB()          { return [250, 204, 21]; }
 
-  // Display id for a decision: prefer the friendly seq form, fall back to canonical id.
+  // Display id for a decision: the canonical short id (D-9m2x), matching the
+  // MCP tools / CLI / docs. Mirrors app/display.ts — keep the two in step.
   function decisionDisplayId(d) {
-    return (d.seq != null) ? ('D-' + d.seq) : d.id;
+    return d.id;
   }
 
-  // Display id for a todo: prefer the friendly seq form, fall back to canonical id.
+  // Display id for a todo: the canonical short id (T-4kqp). Mirrors app/display.ts.
   function todoDisplayId(t) {
-    return (t.seq != null) ? ('T-' + t.seq) : t.id;
+    return t.id;
+  }
+
+  // Spotlight refs arrive in whatever form the caller wrote them, so a record
+  // matches on its canonical id OR its legacy display-seq form (D-12 / T-7).
+  function spotlightHas(set, rec, prefix) {
+    return set.has(String(rec.id)) || (rec.seq != null && set.has(prefix + rec.seq));
   }
 
   let FRAMES = [];
@@ -1484,7 +1491,7 @@ export function createEngine({ canvas, store, callbacks = {}, isLight: isLightFn
       const isSelected = selectedDecId === dec.id;
       // Held spotlight: is this decision in the spotlight set? Match either the
       // seq display id (how refs arrive) or the canonical id (belt-and-braces).
-      const inSpot = !!spotlight && (spotlight.decSet.has(decisionDisplayId(dec)) || spotlight.decSet.has(String(dec.id)));
+      const inSpot = !!spotlight && spotlightHas(spotlight.decSet, dec, 'D-');
       // While a spotlight is active, non-member dots recede to 0.45 opacity
       // (whole-dot: fill, leaders, ring, pill). Members and the no-spotlight
       // case render at full alpha (pixel-identical when spotlight is null).
@@ -1739,7 +1746,7 @@ export function createEngine({ canvas, store, callbacks = {}, isLight: isLightFn
 
       const isSelected = selectedTodoId === todo.id;
       // Held spotlight membership — match the seq display id or the canonical id.
-      const inSpot = !!spotlight && (spotlight.todoSet.has(todoDisplayId(todo)) || spotlight.todoSet.has(String(todo.id)));
+      const inSpot = !!spotlight && spotlightHas(spotlight.todoSet, todo, 'T-');
       // Non-member dots recede to 0.45 while a spotlight is active (whole-dot).
       if (spotlight && !inSpot) ctx.globalAlpha = 0.45;
       // Hover via the floating dot OR this todo's marginalia pill.

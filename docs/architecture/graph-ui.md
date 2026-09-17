@@ -256,7 +256,7 @@ Stream rendering is parked alongside the viewer's WebSocket integration in the c
 
 **`tests/viewer/data-adapt.test.js`** — verifies `adaptProjectData` (now `canvas/adapt.js`, re-exported through `app/data.ts`) turns the six raw API payloads into the exact bundle shape `engine.setData` expects — full member lists (the LOD dot budget caps at draw time, not adapt time) — and the `resyncProject` path that reuses `rawFrameMap` to keep frame positions stable across a live resync. Pure function tests — no I/O. (`tests/viewer/adapt.test.js` covers the direct `canvas/adapt.js` import path.)
 
-**`tests/viewer/display.test.js`** — verifies `decisionDisplayId`/`todoDisplayId`/`projectDisplayName` (`app/display.ts`) fall back correctly when `seq`/`root_path` are absent. Pure unit tests.
+**`tests/viewer/display.test.js`** — verifies `decisionDisplayId`/`todoDisplayId` render the **canonical short id** (`D-9m2x`/`T-4kqp`), never the per-repo `seq`, and that `projectDisplayName` falls back correctly when `root_path` is absent. Pure unit tests.
 
 **`tests/viewer/drawer-stack.test.js`** — verifies `openReplace`/`push`/`pop`/`closeAll` (`app/drawer/drawer-stack.ts`), including `push`'s de-dupe-against-top behavior so a same-record re-click doesn't grow the stack. Pure unit tests.
 
@@ -301,7 +301,7 @@ canvas and the entity store without a refetch of the whole graph.
 | `app/CanvasHost.tsx` | Owns the `<canvas>` element, the `createEngine` instance (`engineRef`), the entity store (`entityStore`), and `ws-client`; boot / project-switch / live-resync orchestration | no |
 | `app/api.ts` | `fetchProjects/fetchGraph/fetchDecisions/fetchAggregates/fetchFileEdges/fetchFrames/fetchTodos` | yes |
 | `app/data.ts` | `adaptProjectData` (pure bundle builder), `loadProject`, `resyncProject` | yes (adapter); I/O at the `load*`/`resync*` boundary |
-| `app/display.ts` | `decisionDisplayId`/`todoDisplayId`/`projectDisplayName` | yes |
+| `app/display.ts` | `decisionDisplayId`/`todoDisplayId` (canonical short id — see below), `projectDisplayName` | yes |
 | `app/entity-store.js` (+`.d.ts`) | Reactive decisions/todos store (pre-React module, unchanged; now constructed and owned by `CanvasHost`) | no (mutable store) |
 | `app/ws-client.js` | WS reconnect + resync client (pre-React module, unchanged; now constructed and owned by `CanvasHost`) | no |
 | `app/toolbar/` | `Toolbar.tsx`, `ProjectSelect.tsx` (custom dropdown, click-outside-to-close), `LayersMenu.tsx` (layer toggles + legend, imports `LAYER_RGB` from the engine) | no |

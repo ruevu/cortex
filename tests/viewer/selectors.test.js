@@ -68,25 +68,27 @@ describe("resolveTodo", () => {
 describe("listRows", () => {
   const b = {
     decisions: [
-      { id: "d1", seq: 1, summary: "first", state: "active", proposedAt: "2026-06-01" },
-      { id: "d2", seq: 2, summary: "second", state: "active", proposedAt: "2026-07-01" },
+      { id: "D-9m2x", seq: 1, summary: "first", state: "active", proposedAt: "2026-06-01" },
+      { id: "D-4kqp", seq: 2, summary: "second", state: "active", proposedAt: "2026-07-01" },
     ],
     allTodos: [
-      { id: "t1", seq: 1, summary: "open todo", state: "proposed", proposedAt: "2026-06-15" },
-      { id: "t2", seq: 2, summary: "done todo", state: "done", proposedAt: "2026-06-30" },
+      { id: "T-a1b2", seq: 1, summary: "open todo", state: "proposed", proposedAt: "2026-06-15" },
+      { id: "T-c3d4", seq: 2, summary: "done todo", state: "done", proposedAt: "2026-06-30" },
     ],
   };
   it("all tab: open items newest-first, closed muted at the bottom", () => {
     const rows = listRows(b, "all");
-    expect(rows.map((r) => r.id)).toEqual(["d2", "t1", "d1", "t2"]);
+    expect(rows.map((r) => r.id)).toEqual(["D-4kqp", "T-a1b2", "D-9m2x", "T-c3d4"]);
     expect(rows[3].closed).toBe(true);
   });
   it("decisions tab excludes todos", () =>
     expect(listRows(b, "decisions").every((r) => r.type === "decision")).toBe(true));
   it("todos tab includes closed todos", () =>
-    expect(listRows(b, "todos").map((r) => r.id)).toEqual(["t1", "t2"]));
-  it("uses friendly display ids", () =>
-    expect(listRows(b, "decisions")[0].displayId).toBe("D-2"));
+    expect(listRows(b, "todos").map((r) => r.id)).toEqual(["T-a1b2", "T-c3d4"]));
+  it("uses the canonical short id as displayId, not the seq", () => {
+    expect(listRows(b, "decisions")[0].displayId).toBe("D-4kqp");
+    expect(listRows(b, "todos")[0].displayId).toBe("T-a1b2");
+  });
 
   describe("frameId scoping (marginalia View all)", () => {
     const fb = {

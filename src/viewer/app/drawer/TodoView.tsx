@@ -18,9 +18,9 @@ export function TodoView({ id }: { id: string }) {
           <span className={`dc-state-pill ${t.state || ""}`}><span className="sw" />{t.state || ""}</span>
         </div>
         <div className="dc-summary">{t.summary || ""}</div>
-        {(t.id || t.proposedBy || t.proposedAt) && (
+        {(t.proposedBy || t.proposedAt) && (
           <div className="dc-provenance">
-            {[t.id && `id ${t.id}`, t.proposedBy && <>proposed by <span className="agent">@{t.proposedBy}</span></>,
+            {[t.proposedBy && <>proposed by <span className="agent">@{t.proposedBy}</span></>,
               t.proposedAt && formatRelativeDate(t.proposedAt)].filter(Boolean)
               .map((part, i) => <span key={i}>{i > 0 && " · "}{part}</span>)}
           </div>)}

@@ -1,9 +1,12 @@
-/** Friendly display ids: D-<seq> / T-<seq>, canonical id fallback. */
-export function decisionDisplayId(d: { seq?: number | null; id: string }): string {
-  return d.seq != null ? `D-${d.seq}` : d.id;
+/** Display ids are the canonical short ids (`D-9m2x` / `T-4kqp`) — the same
+ *  form the MCP tools, CLI and docs use, so an id read off the viewer can be
+ *  pasted straight into `decision({action:"get"})`. The per-repo `seq` is a
+ *  storage/ref convenience, never shown. */
+export function decisionDisplayId(d: { id: string }): string {
+  return d.id;
 }
-export function todoDisplayId(t: { seq?: number | null; id: string }): string {
-  return t.seq != null ? `T-${t.seq}` : t.id;
+export function todoDisplayId(t: { id: string }): string {
+  return t.id;
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July",

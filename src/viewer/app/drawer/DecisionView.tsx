@@ -18,9 +18,9 @@ export function DecisionView({ id }: { id: string }) {
           <span className={`dc-state-pill ${dec.state}`}><span className="sw" />{dec.state}</span>
         </div>
         <div className="dc-summary">{dec.summary}</div>
-        {(dec.id || dec.proposedBy || dec.proposedAt) && (
+        {(dec.proposedBy || dec.proposedAt) && (
           <div className="dc-provenance">
-            {[dec.id && `id ${dec.id}`, dec.proposedBy && <>proposed by <span className="agent">@{dec.proposedBy}</span></>,
+            {[dec.proposedBy && <>proposed by <span className="agent">@{dec.proposedBy}</span></>,
               dec.proposedAt && formatRelativeDate(dec.proposedAt)].filter(Boolean)
               .map((part, i) => <span key={i}>{i > 0 && " · "}{part}</span>)}
           </div>)}
