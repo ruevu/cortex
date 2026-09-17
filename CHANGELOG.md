@@ -36,6 +36,18 @@ All notable changes to Cortex are documented here. The format follows
 - The decision/todo drawer provenance line no longer repeats the id (`id D-vd9z ·
   proposed by …`) — it existed only because the pill above it wasn't showing the
   real one.
+- **The viewer has never rendered in its own typeface.** The non-blocking font
+  pattern shipped in 1.7.0 swapped the stylesheet from `media="print"` to `"all"`
+  via an inline `onload` attribute — which the server's own `script-src 'self'`
+  CSP blocks. The handler never ran, so the sheet stayed `print` and every load
+  since 1.7.0 fell back to system fonts, announced by nothing but a console CSP
+  error. The swap now happens in the bundle (`app/fonts.ts`
+  `activateFontStylesheets`, called from `main.tsx`), promoting each link on its
+  `load` event — or immediately, when the sheet already loaded before the
+  deferred entry module ran. The CSP is untouched, first paint still cannot stall
+  on an unreachable font host, and the `<noscript>` fallback is unchanged. The
+  guard test had been asserting the inline handler was *present*; it now asserts
+  no inline event handler exists anywhere in the document. (`T-aap4`, `D-7fqb`)
 
 ## [2.4.0] — 2026-09-11
 

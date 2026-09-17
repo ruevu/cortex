@@ -7,10 +7,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- Non-blocking font load: never let an unreachable external host stall first paint.
-     Loads with media="print" (doesn't block render), then swaps to "all" on load. -->
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+     Loads with media="print" (doesn't block render); app/fonts.ts swaps it to
+     "all" on load. The swap must NOT be an inline onload attribute - the
+     server's script-src 'self' CSP blocks inline handlers, which silently left
+     the viewer in fallback fonts on every load (T-aap4). -->
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet" media="print" data-font-stylesheet>
 <noscript><link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet"></noscript>
-  <script type="module" crossorigin src="/viewer/assets/index-Csm5SS2M.js"></script>
+  <script type="module" crossorigin src="/viewer/assets/index-vPC7pEJc.js"></script>
   <link rel="stylesheet" crossorigin href="/viewer/assets/index-Cso5najo.css">
 </head>
 <body>
