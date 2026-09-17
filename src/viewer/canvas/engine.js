@@ -587,8 +587,10 @@ export function createEngine({ canvas, store, callbacks = {}, isLight: isLightFn
       callbacks.onSpotlight?.(null);
       return;
     }
-    // Dots carry canonical ids; refs arrive as seq display ids (D-12 / T-3).
-    // Coerce both into the Sets so membership matches regardless of ref form.
+    // Refs are stored verbatim, in whatever form the caller wrote them —
+    // canonical (D-9m2x) or the legacy seq display form (D-12). Neither the
+    // show dispatcher nor /api/show-focus canonicalizes, so the two-form
+    // membership test is spotlightHas's job, per D-aqt6.
     const decSet = new Set();
     for (const id of decisionIds) decSet.add(String(id));
     const todoSet = new Set();
