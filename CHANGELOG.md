@@ -18,6 +18,25 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.1] — 2026-09-17
+
+### Fixed
+
+- **Viewer id pills show the canonical short id, not the sequence number.** The
+  drawer header pill, records list, ref pills, command-palette entries, floating
+  decision/todo dot labels and frame marginalia all rendered `D-<seq>`/`T-<seq>`
+  (`D-101`), a per-repo counter that appears nowhere else. Every other surface —
+  MCP tools, CLI, decision prose, docs — uses the canonical short id (`D-vd9z`),
+  so an id read off the viewer could not be pasted into
+  `decision({action:"get"})`. `decisionDisplayId`/`todoDisplayId` now return the
+  canonical id, in both `app/display.ts` and the canvas engine's copy. Spotlight
+  refs still resolve in **either** form: the seq match moved out of the display
+  helper into an explicit `spotlightHas`, so an existing
+  `show({action:"focus", refs:["D-12"]})` keeps lighting its dot.
+- The decision/todo drawer provenance line no longer repeats the id (`id D-vd9z ·
+  proposed by …`) — it existed only because the pill above it wasn't showing the
+  real one.
+
 ## [2.4.0] — 2026-09-11
 
 ### Added
@@ -2770,6 +2789,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.1]: https://github.com/ruevu/cortex/releases/tag/v2.4.1
 [2.4.0]: https://github.com/ruevu/cortex/releases/tag/v2.4.0
 [2.3.3]: https://github.com/ruevu/cortex/releases/tag/v2.3.3
 [2.3.2]: https://github.com/ruevu/cortex/releases/tag/v2.3.2
