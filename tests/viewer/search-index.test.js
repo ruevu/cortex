@@ -8,8 +8,8 @@ const bundle = {
     { id: "s1", kind: "function", name: "createStore", file_path: "src/graph/store.ts" },
     { id: "v1", kind: "section", name: "Overview", file_path: "docs/x.md" },
   ],
-  decisions: [{ id: "d1", seq: 4, summary: "two sqlite files", state: "active" }],
-  allTodos: [{ id: "t1", seq: 9, summary: "fix drawer", state: "proposed" }],
+  decisions: [{ id: "D-9m2x", seq: 4, summary: "two sqlite files", state: "active" }],
+  allTodos: [{ id: "T-4kqp", seq: 9, summary: "fix drawer", state: "proposed" }],
 };
 const projects = [{ name: "slug", root_path: "/x/cortex" }];
 const stories = [{ id: "story-1", title: "Add stories fetchers", stepCount: 3, status: "in_progress" }];
@@ -19,6 +19,14 @@ describe("search index", () => {
   it("indexes files, symbols, frames, decisions, todos", () => {
     const groups = new Set(entries.map((e) => e.group));
     for (const g of ["files", "symbols", "frames", "decisions", "todos"]) expect(groups).toContain(g);
+  });
+  it("labels decisions and todos by canonical short id, not seq", () => {
+    const dec = entries.find((e) => e.group === "decisions");
+    expect(dec.label).toBe("D-9m2x \u00b7 two sqlite files");
+    expect(dec.haystack).toBe("D-9m2x two sqlite files");
+    const todo = entries.find((e) => e.group === "todos");
+    expect(todo.label).toBe("T-4kqp \u00b7 fix drawer");
+    expect(todo.haystack).toBe("T-4kqp fix drawer");
   });
   it("excludes non-symbol node kinds (sections)", () =>
     expect(entries.some((e) => e.label === "Overview")).toBe(false));

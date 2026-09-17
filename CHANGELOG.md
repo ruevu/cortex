@@ -18,6 +18,37 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.1] — 2026-09-17
+
+### Fixed
+
+- **Viewer id pills show the canonical short id, not the sequence number.** The
+  drawer header pill, records list, ref pills, command-palette entries, floating
+  decision/todo dot labels and frame marginalia all rendered `D-<seq>`/`T-<seq>`
+  (`D-101`), a per-repo counter that appears nowhere else. Every other surface —
+  MCP tools, CLI, decision prose, docs — uses the canonical short id (`D-vd9z`),
+  so an id read off the viewer could not be pasted into
+  `decision({action:"get"})`. `decisionDisplayId`/`todoDisplayId` now return the
+  canonical id, in both `app/display.ts` and the canvas engine's copy. Spotlight
+  refs still resolve in **either** form: the seq match moved out of the display
+  helper into an explicit `spotlightHas`, so an existing
+  `show({action:"focus", refs:["D-12"]})` keeps lighting its dot.
+- The decision/todo drawer provenance line no longer repeats the id (`id D-vd9z ·
+  proposed by …`) — it existed only because the pill above it wasn't showing the
+  real one.
+- **The viewer has never rendered in its own typeface.** The non-blocking font
+  pattern shipped in 1.7.0 swapped the stylesheet from `media="print"` to `"all"`
+  via an inline `onload` attribute — which the server's own `script-src 'self'`
+  CSP blocks. The handler never ran, so the sheet stayed `print` and every load
+  since 1.7.0 fell back to system fonts, announced by nothing but a console CSP
+  error. The swap now happens in the bundle (`app/fonts.ts`
+  `activateFontStylesheets`, called from `main.tsx`), promoting each link on its
+  `load` event — or immediately, when the sheet already loaded before the
+  deferred entry module ran. The CSP is untouched, first paint still cannot stall
+  on an unreachable font host, and the `<noscript>` fallback is unchanged. The
+  guard test had been asserting the inline handler was *present*; it now asserts
+  no inline event handler exists anywhere in the document. (`T-aap4`, `D-7fqb`)
+
 ## [2.4.0] — 2026-09-11
 
 ### Added
@@ -2770,6 +2801,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.1]: https://github.com/ruevu/cortex/releases/tag/v2.4.1
 [2.4.0]: https://github.com/ruevu/cortex/releases/tag/v2.4.0
 [2.3.3]: https://github.com/ruevu/cortex/releases/tag/v2.3.3
 [2.3.2]: https://github.com/ruevu/cortex/releases/tag/v2.3.2

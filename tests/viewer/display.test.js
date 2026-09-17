@@ -1,5 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { projectDisplayName, formatRelativeDate, checkoutLabel } from "../../src/viewer/app/display.ts";
+import { decisionDisplayId, todoDisplayId, projectDisplayName, formatRelativeDate, checkoutLabel }
+  from "../../src/viewer/app/display.ts";
+
+describe("decisionDisplayId / todoDisplayId", () => {
+  it("shows the canonical short id, not the per-repo seq", () => {
+    expect(decisionDisplayId({ id: "D-9m2x", seq: 4 })).toBe("D-9m2x");
+    expect(todoDisplayId({ id: "T-4kqp", seq: 9 })).toBe("T-4kqp");
+  });
+  it("works on a bare ref that carries no seq", () => {
+    expect(decisionDisplayId({ id: "D-sq61" })).toBe("D-sq61");
+    expect(todoDisplayId({ id: "T-bty4" })).toBe("T-bty4");
+  });
+});
 
 describe("checkoutLabel", () => {
   it("appends the branch for a worktree project", () => {
