@@ -246,9 +246,28 @@ Graph-enriched text search.
 - **Params:** `repo_path`, `pattern`.
 - **Returns:** ripgrep-style `file:line:` hits, each annotated with the
   enclosing function/class. Anchored to `repo_path` (not the server cwd).
+  At most **50 hits, and at most 5 per file** — a file with more shows
+  `… +N more in this file`, and a result narrower than the match count ends with
+  `⚠ showing 50 of N matches`.
+- **Ranking:** whole files are ordered **definition → source → test → docs →
+  fixture**, then by path, then by line; a file's hits stay together. "Definition"
+  means the graph holds a symbol of that exact name in that file, so
+  `search_code("parseClaudeLine")` leads with the file that declares it. Ranking
+  runs over **every** match before the 50-hit window is taken.
 - **Why:** `Grep` that tells you *which symbol* each match belongs to. Uses the
   bundled `@vscode/ripgrep` binary (falls back to `grep`) so a stripped server
   PATH can't hide it.
+
+> **Until 2.4.1 this tool truncated before ranking.** It kept the first 50 lines
+> ripgrep emitted — and ripgrep's parallel walker emits in nondeterministic
+> order, so the survivors were an arbitrary sample that changed between identical
+> runs, with nothing in the output saying anything had been dropped. Measured on
+> a real repo: `parseClaudeLine`, 150 matches, and the file DEFINING it sat at
+> emission index 68–137 across five runs — never once inside the window. An agent
+> reading that result concluded the symbol was absent from its own definition
+> site. If you are debugging a "cortex can't see this file" report against an
+> older sidecar, this is almost certainly it; `cortex-sidecar.json` pins the
+> version that actually answers, not the one installed.
 
 ### `query_graph`
 Run a Cypher-style query against the graph.
