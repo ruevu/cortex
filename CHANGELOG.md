@@ -18,6 +18,51 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.2] — 2026-09-21
+
+### Fixed
+
+- **`search_code` truncated its results before ranking them, and said nothing.**
+  It kept the first 50 lines ripgrep emitted and stopped. ripgrep's parallel
+  walker emits in nondeterministic order, so those 50 were an arbitrary sample
+  that differed between identical runs — and the output carried no indication
+  that anything had been dropped, so a partial answer read as a complete one.
+  Measured on a consuming repo: `parseClaudeLine`, 150 matches across 32 files,
+  and the file that DEFINES it sat at emission index 68, 82, 90, 137 and 137
+  across five identical runs — never once inside the window. Agents concluded
+  the symbol was absent from its own definition site, and reached for raw
+  `grep`, which is the one thing the tool exists to make unnecessary.
+
+  Three changes, together:
+
+  - **Ranking now runs over every match, before the window is taken.** Whole
+    files are ordered `definition → source → test → docs → fixture`, then by
+    path, then by line, and a file's hits stay together. "Definition" is a graph
+    fact — a symbol of that exact name declared in that file — so a search for a
+    symbol now leads with the file that declares it.
+  - **A per-file cap of 5** in the MCP window, with `… +N more in this file`. One
+    test file held 52 of those 150 matches; at any budget, a single chatty file
+    otherwise crowds out every other file that matched.
+  - **A truncation footer** — `⚠ showing 50 of 150 matches` — so a partial result
+    can never again be mistaken for an exhaustive one.
+
+  The previous ranker (`rankSearchHits`, kind-weight × path) is gone. It scored
+  a hit by its enclosing symbol's `KIND_WEIGHT`, which reads as "is this code" —
+  but a vitest `it()` callback is a `function` node, so every match in a test
+  file tied with the line defining the symbol and an alphabetical tiebreak
+  decided which survived. Tests and docs are not low-value because of what kind
+  of node encloses them. The CLI (`cortex code search`) keeps its 500-hit window
+  and gains the same ordering, no per-file cap (it paginates), and a footer that
+  reports the true match count rather than the size of its own window.
+
+- **A `search_code` pattern beginning with a dash returned "No results".**
+  Neither argv builder terminated its options, so `search_code("--max-count")`
+  handed the pattern to ripgrep as a flag; it exited 2 with a usage error, which
+  the exec classifier — seeing no output and no regex parse error — reported as
+  `empty`. A false negative shaped exactly like a genuine "no matches", which is
+  the one failure mode a caller cannot tell from an answer. Both builders now
+  pass `--` immediately before the pattern.
+
 ## [2.4.1] — 2026-09-17
 
 ### Fixed
@@ -2801,6 +2846,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.2]: https://github.com/ruevu/cortex/releases/tag/v2.4.2
 [2.4.1]: https://github.com/ruevu/cortex/releases/tag/v2.4.1
 [2.4.0]: https://github.com/ruevu/cortex/releases/tag/v2.4.0
 [2.3.3]: https://github.com/ruevu/cortex/releases/tag/v2.3.3
