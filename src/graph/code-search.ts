@@ -4,7 +4,6 @@ import { createRequire } from "node:module";
 import { accessSync, constants as fsConstants } from "node:fs";
 import type { GraphStore } from "./store.js";
 import type { IndexerNode } from "./code-queries.js";
-import { KIND_WEIGHT } from "./node-ranker.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -16,6 +15,12 @@ export function buildRgArgs(pattern: string): string[] {
     "--line-number",
     "--color=never",
     "--max-count", "200",
+    // `--` before the pattern: without it a pattern that begins with a dash
+    // (`--max-count`, `-rf`) is parsed as a FLAG. rg then exits 2 with a usage
+    // error, which `classifySearchExec` reads as a search error with no output
+    // and reports as `empty` — a silent false negative rather than a failure.
+    // Mesh's palette search learned this first; see its search-args.ts.
+    "--",
     pattern,
     ".",
   ];
@@ -38,6 +43,7 @@ export function buildGrepFallbackArgs(pattern: string): string[] {
     "--exclude-dir=.tmp",
     "--exclude-dir=.cortex",
     "--exclude-dir=.venv",
+    "--", // same leading-dash guard as buildRgArgs
     pattern,
     ".",
   ];
@@ -167,15 +173,155 @@ export type SearchHit = {
   line: number;
   text: string;
   enclosing?: { kind: string; qualified_name: string; file_path: string };
+  /** Set on the LAST emitted hit of a file whose remaining matches were dropped
+   *  by `perFileCap`, so the caller can say how many it is not being shown. */
+  moreInFile?: number;
 };
 
 export type SearchOutcome =
-  | { kind: "hits"; hits: SearchHit[] }
+  /** `total` counts every matching line the search produced, not the ranked
+   *  window — `truncated` is `hits.length < total`. Both exist so a partial
+   *  result can never be rendered as a complete one, which is the defect this
+   *  file shipped: 50 hits in arbitrary order, with nothing saying so. */
+  | { kind: "hits"; hits: SearchHit[]; total: number; truncated: boolean }
   | { kind: "empty" }
   | { kind: "invalid_pattern"; detail: string }
   | { kind: "error"; detail: string };
 
 const HIT_LINE_RE = /^\.\/(.+?):(\d+):(.*)$/;
+
+/**
+ * How many hit lines are parsed into objects before the ranker sees them.
+ *
+ * Ranking is only honest if it ranks EVERYTHING — a cap applied before the sort
+ * is exactly the defect this rewrite removes. This ceiling is therefore far
+ * above any budget a caller asks for (50 for MCP, 500 for the CLI): it bounds
+ * memory on a pathological pattern without participating in ordinary searches.
+ * `total` counts the real number of matches either way, so a search that does
+ * reach it still reports its denominator honestly.
+ */
+const COLLECT_CAP = 5000;
+
+/** Tiers, best first. A file lands in exactly one; every hit in it inherits it. */
+export const TIER = { definition: 0, source: 1, test: 2, docs: 3, fixture: 4 } as const;
+
+// Checked in this order — a `__snapshots__` directory usually sits INSIDE a test
+// tree, and a fixture is worth less than the test that reads it.
+const FIXTURE_RE = /(^|\/)(__snapshots__|__fixtures__|fixtures?|testdata|golden)(\/|$)|\.snap$/i;
+const DOC_RE = /\.(md|mdx|markdown|rst|adoc|txt)$/i;
+const TEST_RE = /(^|\/)(tests?|e2e|specs?)\/|[.\-_](test|spec)\.[a-z0-9]+$/i;
+
+/**
+ * Which tier a file's hits belong to.
+ *
+ * Path-shaped rather than graph-shaped on purpose. The previous ranker scored a
+ * hit by its enclosing symbol's KIND_WEIGHT, which reads as "is this code" — but
+ * a vitest `it()` callback is a `function` node, so all 52 matches in one test
+ * file tied with the line that DEFINES the symbol, and an alphabetical tiebreak
+ * decided which survived. Tests and docs are not low-value because of the kind
+ * of node that encloses them; they are low-value because of what they ARE.
+ */
+export function fileTier(file: string, defFiles: ReadonlySet<string>): number {
+  if (defFiles.has(file)) return TIER.definition;
+  if (FIXTURE_RE.test(file)) return TIER.fixture;
+  if (DOC_RE.test(file)) return TIER.docs;
+  if (TEST_RE.test(file)) return TIER.test;
+  return TIER.source;
+}
+
+/**
+ * Order hits by file tier, then path, then line — taking at most `perFileCap`
+ * from any one file.
+ *
+ * Grouped by FILE rather than sorted hit-by-hit: a reader scans results by file,
+ * and interleaving thirty files by a per-hit score is harder to read than the
+ * arbitrary order it replaces. The per-file cap is the other half of the fix —
+ * at any budget, one chatty file (52 of 150 matches, measured) otherwise crowds
+ * out every other file that matched.
+ *
+ * Pure: never mutates the input array or the hits in it.
+ */
+export function rankHits(
+  all: readonly SearchHit[],
+  opts: { defFiles?: ReadonlySet<string>; maxHits: number; perFileCap?: number },
+): SearchHit[] {
+  const defFiles = opts.defFiles ?? new Set<string>();
+  const byFile = new Map<string, SearchHit[]>();
+  for (const h of all) {
+    const arr = byFile.get(h.file);
+    if (arr) arr.push(h);
+    else byFile.set(h.file, [h]);
+  }
+  const files = [...byFile.keys()].sort(
+    (a, b) => fileTier(a, defFiles) - fileTier(b, defFiles) || a.localeCompare(b),
+  );
+
+  const out: SearchHit[] = [];
+  for (const file of files) {
+    if (out.length >= opts.maxHits) break;
+    const lines = [...byFile.get(file)!].sort((x, y) => x.line - y.line);
+    const room = opts.maxHits - out.length;
+    const take = lines.slice(0, Math.min(opts.perFileCap ?? lines.length, room));
+    const hidden = lines.length - take.length;
+    // Copied, not mutated: `moreInFile` is a property of THIS rendering of the
+    // hit, and the caller's array must come back untouched.
+    if (hidden > 0 && take.length > 0) {
+      take[take.length - 1] = { ...take[take.length - 1]!, moreInFile: hidden };
+    }
+    out.push(...take);
+  }
+  return out;
+}
+
+/** A bare identifier can name a symbol; `foo\s*\(` cannot, and an equality
+ *  match on it would find nothing anyway. Only then is the query worth a trip. */
+const BARE_IDENT_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/** Kinds that can DEFINE a name. Deliberately excludes `module` / `section` /
+ *  `file` / `folder`: a Markdown heading reading `parseClaudeLine` is a mention,
+ *  and promoting the doc that mentions a symbol to tier 0 would inupend the fix. */
+const DEF_KINDS = ["function", "class", "method", "interface", "type", "variable", "route", "channel"];
+
+/** Files the graph says DEFINE `pattern`. Empty when the pattern is not a bare
+ *  identifier, or when the caller passed no store (every unit test, and any
+ *  unindexed repo) — tiering then starts at `source`, which still works. */
+function definitionFiles(pattern: string, store?: GraphStore, project?: string): Set<string> {
+  if (!store || !project || !BARE_IDENT_RE.test(pattern)) return new Set();
+  try {
+    const rows = store.queryRaw<{ file_path: string }>(
+      `SELECT DISTINCT file_path FROM nodes
+        WHERE project = ? AND name = ?
+          AND kind IN (${DEF_KINDS.map(() => "?").join(", ")})`,
+      [project, pattern, ...DEF_KINDS],
+    );
+    return new Set(rows.map((r) => r.file_path).filter(Boolean));
+  } catch {
+    // A ranking refinement must never be able to fail a search.
+    return new Set();
+  }
+}
+
+/** Annotate each hit with its innermost enclosing symbol. Runs AFTER ranking, on
+ *  the ranked window only, so its cost stays proportional to what is shown. */
+function annotate(hits: SearchHit[], store?: GraphStore, project?: string): void {
+  if (!store || !project) return;
+  for (const hit of hits) {
+    const enclosing = store.queryRaw<IndexerNode>(
+      `SELECT * FROM nodes
+       WHERE project = ? AND file_path = ? AND start_line <= ? AND end_line >= ?
+         AND kind NOT IN ('decision', 'pr', 'todo')
+       ORDER BY (end_line - start_line) ASC LIMIT 1`,
+      [project, hit.file, hit.line, hit.line],
+    );
+    if (enclosing.length > 0) {
+      hit.enclosing = {
+        kind: enclosing[0]!.kind,
+        qualified_name: enclosing[0]!.qualified_name,
+        file_path: enclosing[0]!.file_path,
+      };
+    }
+  }
+}
 
 export async function runCodeSearch(opts: {
   pattern: string;
@@ -183,6 +329,9 @@ export async function runCodeSearch(opts: {
   store?: GraphStore;
   project?: string;
   maxHits?: number;
+  /** Most hits to take from any ONE file. Unset = no cap (the CLI, which
+   *  paginates and must be able to reach every match). */
+  perFileCap?: number;
 }): Promise<SearchOutcome> {
   const maxHits = opts.maxHits ?? 50;
   const execOpts = { timeout: 10_000, maxBuffer: RG_MAX_BUFFER, cwd: opts.repoRoot };
@@ -200,8 +349,8 @@ export async function runCodeSearch(opts: {
       try {
         const r2 = await execFileAsync("grep", buildGrepFallbackArgs(opts.pattern), execOpts);
         stdout = r2.stdout;
-      } catch (grepErr) {
-        const o2 = classifySearchExec(grepErr as SearchExecError);
+      } catch (fallbackErr) {
+        const o2 = classifySearchExec(fallbackErr as SearchExecError);
         if (o2.kind === "output") stdout = o2.stdout;
         else if (o2.kind === "empty") return { kind: "empty" };
         else if (o2.kind === "invalid_pattern") return { kind: "invalid_pattern", detail: o2.detail };
@@ -213,46 +362,25 @@ export async function runCodeSearch(opts: {
 
   if (!stdout.trim()) return { kind: "empty" };
 
-  const hits: SearchHit[] = [];
+  // Parse EVERY match line before ranking. `total` counts them all, even past
+  // COLLECT_CAP, so the footer's denominator is the true number of matches.
+  const all: SearchHit[] = [];
+  let total = 0;
   for (const line of stdout.split("\n")) {
     const m = line.match(HIT_LINE_RE);
     if (!m) continue;
-    hits.push({ file: m[1], line: parseInt(m[2], 10), text: m[3].replace(/\r$/, "") });
-    if (hits.length >= maxHits) break;
-  }
-  if (hits.length === 0) return { kind: "empty" };
-
-  if (opts.store && opts.project) {
-    for (const hit of hits) {
-      const enclosing = opts.store.queryRaw<IndexerNode>(
-        `SELECT * FROM nodes
-         WHERE project = ? AND file_path = ? AND start_line <= ? AND end_line >= ?
-           AND kind NOT IN ('decision', 'pr', 'todo')
-         ORDER BY (end_line - start_line) ASC LIMIT 1`,
-        [opts.project, hit.file, hit.line, hit.line],
-      );
-      if (enclosing.length > 0) {
-        hit.enclosing = { kind: enclosing[0].kind, qualified_name: enclosing[0].qualified_name, file_path: enclosing[0].file_path };
-      }
+    total++;
+    if (all.length < COLLECT_CAP) {
+      all.push({ file: m[1]!, line: parseInt(m[2]!, 10), text: m[3]!.replace(/\r$/, "") });
     }
   }
-  return { kind: "hits", hits };
-}
+  if (all.length === 0) return { kind: "empty" };
 
-// Below the 0.5 unknown-kind fallback in `weight` below — a hit with no
-// enclosing symbol sinks beneath every real symbol hit.
-const UNENCLOSED_WEIGHT = 0;
-
-/** Order hits code-first: by enclosing-symbol kind weight (function/class/method
- *  high, module low, unenclosed lowest), then file, then line. Pure; new array.
- *  This demotes Markdown/doc hits (which enclose to a `module` node or nothing)
- *  beneath real code hits without a doc-extension list. */
-export function rankSearchHits(hits: SearchHit[]): SearchHit[] {
-  const weight = (h: SearchHit) => (h.enclosing ? (KIND_WEIGHT[h.enclosing.kind] ?? 0.5) : UNENCLOSED_WEIGHT);
-  return [...hits].sort(
-    (a, b) =>
-      weight(b) - weight(a) ||
-      a.file.localeCompare(b.file) ||
-      a.line - b.line,
-  );
+  const hits = rankHits(all, {
+    defFiles: definitionFiles(opts.pattern, opts.store, opts.project),
+    maxHits,
+    perFileCap: opts.perFileCap,
+  });
+  annotate(hits, opts.store, opts.project);
+  return { kind: "hits", hits, total, truncated: hits.length < total };
 }

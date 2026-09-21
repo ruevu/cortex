@@ -9,7 +9,7 @@ import { resolveInput, type Disambiguation } from "../resolve-input.js";
 import { writeRows, chooseFormat } from "../format.js";
 import { indexerBinPath } from "../paths.js";
 import { unwrapIndexerResult, renderIndexerResult } from "../indexer-output.js";
-import { runCodeSearch, rankSearchHits } from "../../graph/code-search.js";
+import { runCodeSearch } from "../../graph/code-search.js";
 import { computeHotspots } from "../../architecture/hotspots.js";
 import { loadGovernance } from "../../architecture/governed.js";
 import { composeOnboarding } from "../../onboarding/compose.js";
@@ -106,7 +106,12 @@ async function cmdSearch(cmd: CodeCommand, ctx: ProjectContext): Promise<void> {
   if (outcome.kind === "error") throw new DomainError(outcome.detail);
 
   const fmt = chooseFormat(cmd.flags.format as string | undefined, process.stdout.isTTY);
-  const ranked = rankSearchHits(outcome.kind === "hits" ? outcome.hits : []);
+  // Already ranked, and ranked over EVERY match rather than over whichever ones
+  // arrived first — `runCodeSearch` owns the ordering now, so both it and the
+  // MCP tool cannot drift apart. No `perFileCap` here: the CLI paginates, and a
+  // per-file cap would hide matches that `--offset` could never reach.
+  const ranked = outcome.kind === "hits" ? outcome.hits : [];
+  const total = outcome.kind === "hits" ? outcome.total : 0;
   const limit = clampLimit(cmd.flags.limit !== undefined ? Number(cmd.flags.limit) : undefined);
   const offset = clampOffset(cmd.flags.offset !== undefined ? Number(cmd.flags.offset) : undefined);
   const page = ranked.slice(offset, offset + limit);
@@ -120,7 +125,11 @@ async function cmdSearch(cmd: CodeCommand, ctx: ProjectContext): Promise<void> {
     ? `no matches for '${pattern}' in ${ctx.projectName}`
     : `offset ${offset} is past the ${ranked.length} match(es)`);
   if (page.length > 0) {
-    process.stderr.write(`# showing ${offset + 1}–${offset + page.length} of ${ranked.length}\n`);
+    // `total` is every match; `ranked.length` is what this run kept (maxHits).
+    // Reporting both is the point — a window that says "of 500" when the repo
+    // holds 3,000 is the dishonesty this whole change exists to remove.
+    const scope = ranked.length < total ? ` (ranked window of ${total} total)` : "";
+    process.stderr.write(`# showing ${offset + 1}–${offset + page.length} of ${ranked.length}${scope}\n`);
   }
 }
 

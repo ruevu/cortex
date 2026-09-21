@@ -996,6 +996,10 @@ export function registerCodeTools(
           store: ctx.store,
           project: project ?? undefined,
           maxHits: 50,
+          // One file cannot take the whole budget. Measured on Mesh: a single
+          // test file held 52 of 150 matches for one symbol, so an uncapped
+          // window showed one file and hid the thirty-one others that matched.
+          perFileCap: 5,
         });
         if (outcome.kind === "empty") return empty(`search_code(${pattern})`);
         if (outcome.kind === "invalid_pattern") {
@@ -1010,12 +1014,21 @@ export function registerCodeTools(
         const text = outcome.hits
           .map((h) => {
             const base = `./${h.file}:${h.line}:${h.text}`;
-            return h.enclosing
+            const line = h.enclosing
               ? `${base}  // in ${h.enclosing.kind} ${denormalize(h.enclosing.qualified_name, h.enclosing.file_path)}`
               : base;
+            return h.moreInFile ? `${line}\n    … +${h.moreInFile} more in this file` : line;
           })
           .join("\n");
-        return ok(text);
+        // A truncated result that does not say so reads as a complete one — the
+        // caller then concludes a symbol is absent from a file it is defined in.
+        // That is precisely what this tool did, silently, for every pattern with
+        // more than 50 matches.
+        const footer = outcome.truncated
+          ? `\n\n⚠ showing ${outcome.hits.length} of ${outcome.total} matches — ranked ` +
+            "definition → source → test → docs, max 5 per file. Narrow the pattern to see the rest."
+          : "";
+        return ok(text + footer);
       },
       { resolver, freshnessAware: true },
     ),

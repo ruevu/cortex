@@ -20,6 +20,21 @@ describe("search_code argv builders", () => {
     expect(args).toContain(".");
   });
 
+  // Both builders put `--` immediately before the pattern. Without it a pattern
+  // that begins with a dash is parsed as a flag: the binary exits 2 with a usage
+  // error, `classifySearchExec` finds no output and no regex parse error, and
+  // the search reports `empty`. A false negative shaped exactly like a real
+  // "no matches" — the one failure an agent cannot tell from an answer.
+  it("buildRgArgs: terminates options with -- right before the pattern", () => {
+    // A pattern that is ALSO one of the builder's own flags, so a test that
+    // merely looked for the string would pass on the broken argv too.
+    expect(buildRgArgs("--max-count").slice(-3)).toEqual(["--", "--max-count", "."]);
+  });
+
+  it("buildGrepFallbackArgs: terminates options with -- right before the pattern", () => {
+    expect(buildGrepFallbackArgs("-rf").slice(-3)).toEqual(["--", "-rf", "."]);
+  });
+
   it("buildGrepFallbackArgs: excludes node_modules", () => {
     const args = buildGrepFallbackArgs("ribbon");
     expect(args).toContain("--exclude-dir=node_modules");
