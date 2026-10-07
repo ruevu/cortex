@@ -22,6 +22,7 @@ import { withIndexLock } from "../../db/index-lock.js";
 import { worktreeRoot, mainWorktreeRoot } from "../../db/git-root.js";
 import { gitBranch } from "../../git/worktree-state.js";
 import { reapRepoSlugCache, sweepCurrentRepo } from "../../db/store-gc.js";
+import { brand } from "../prog.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -262,7 +263,7 @@ function renderFramesLine(r: FrameResult): string {
       // attempted automatically, so "not set up yet" is no longer a state a
       // user can be in without something having gone wrong or been declined.
       return r.reason === "venv_missing"
-        ? "frames: skipped (python venv unavailable — run 'cortex setup frames' to see why)"
+        ? brand("frames: skipped (python venv unavailable — run 'cortex setup frames' to see why)")
         : `frames: skipped (${r.reason})`;
     case "failed":
       return `frames: failed (${r.reason})`;

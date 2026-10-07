@@ -1,5 +1,6 @@
 import { GraphStore } from "../graph/store.js";
 import type { ProjectContext } from "./context.js";
+import { brand } from "./prog.js";
 
 function pickSampleFunction(dbPath: string, project: string): string | null {
   try {
@@ -21,6 +22,10 @@ function pickSampleFunction(dbPath: string, project: string): string | null {
 }
 
 export function renderTour(ctx: ProjectContext): string {
+  return brand(tourText(ctx));
+}
+
+function tourText(ctx: ProjectContext): string {
   if (ctx.state === "indexed" && ctx.graphDbPath && ctx.projectName) {
     const sample = pickSampleFunction(ctx.graphDbPath, ctx.projectName);
     if (!sample) {

@@ -1,5 +1,6 @@
 import { makeStyler, glyphs } from "./style.js";
 import { MigrationError } from "../db/migrate.js";
+import { brand } from "./prog.js";
 
 export class UsageError extends Error {
   constructor(message: string, public hint?: string) {
@@ -37,10 +38,13 @@ export function renderError(
   const s = makeStyler(stream);
   const g = glyphs();
 
-  const writeLabel = (msg: string) => {
+  // Messages and hints name commands to run next — in the launcher's terms.
+  const writeLabel = (raw: string) => {
+    const msg = brand(raw);
     stream.write(s.enabled ? `${s.red(s.bold(g.err + " "))}${s.red(msg)}\n` : `ERROR: ${msg}\n`);
   };
-  const writeHint = (hint: string, prefix = "") => {
+  const writeHint = (raw: string, prefix = "") => {
+    const hint = brand(raw);
     stream.write(s.enabled ? `\n${s.dim(`${g.arrow} ${prefix}${hint}`)}\n` : `\n${prefix}${hint}\n`);
   };
 

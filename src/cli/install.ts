@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { EnvironmentError } from "./errors.js";
 import { repoRoot } from "./paths.js";
 import { setupVenv } from "../frame-extraction/venv.js";
+import { brand } from "./prog.js";
 
 export type InstallTarget = "symlink" | "alias";
 
@@ -127,8 +128,8 @@ export function runInstall(opts: { quiet?: boolean; uninstall?: boolean }): void
     if (!opts.quiet) {
       if (venv.status === "ok") process.stdout.write("frame extraction ready.\n");
       else if (venv.status === "python_missing")
-        process.stdout.write("frame extraction unavailable: python3 not found. Install python3, then run 'cortex setup frames'.\n");
-      else process.stdout.write(`frame extraction venv setup failed (${venv.reason}). Run 'cortex setup frames' to retry.\n`);
+        process.stdout.write(brand("frame extraction unavailable: python3 not found. Install python3, then run 'cortex setup frames'.\n"));
+      else process.stdout.write(brand(`frame extraction venv setup failed (${venv.reason}). Run 'cortex setup frames' to retry.\n`));
     }
   }
 }
