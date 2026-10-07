@@ -4,6 +4,7 @@ import { DecisionsRepository } from "../../decisions/repository.js";
 import { DecisionLinksRepository } from "../../decisions/links-repository.js";
 import { hashGovernedSource, type GovernedRef } from "../../decisions/reconciliation.js";
 import { worktreeRoot } from "../../db/git-root.js";
+import { brand } from "../prog.js";
 
 /** Count active, reconcilable decisions whose governed hash drifted. Pure-ish:
  *  takes the repos so it is unit-testable without path resolution. */
@@ -26,7 +27,7 @@ export function countDriftedDecisions(
  *  containing `startDir` (default: the cwd). */
 export function runReconcileCommand(sub: string | null, startDir: string = process.cwd()): void {
   const subCmd = sub ?? "status";
-  if (subCmd !== "status") { process.stderr.write(`unknown: cortex reconcile ${subCmd}\n`); process.exit(2); }
+  if (subCmd !== "status") { process.stderr.write(brand(`unknown: cortex reconcile ${subCmd}\n`)); process.exit(2); }
   // Anchor to the CHECKOUT ROOT, not the cwd. Governed refs are stored
   // repo-relative, so hashing them from a subdirectory resolves every one to
   // <missing> and reports the entire store as drifted. Harmless while

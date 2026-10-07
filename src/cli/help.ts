@@ -1,4 +1,5 @@
 import { NO_STYLE, type Styler } from "./style.js";
+import { brand, progName } from "./prog.js";
 
 type CommandDoc = {
   usage: string;
@@ -135,12 +136,14 @@ export function renderTopLevelHelp(styler: Styler = NO_STYLE): string {
     h("Meta:"),
     `  ${ex("cortex tour")}                 60-second guided walkthrough`,
     `  ${ex("cortex help <topic>")}         concept-level help (qualified-names, projects, …)`,
-    `  ${ex("cortex install")}              add cortex to PATH`,
+    // Linking bin/cortex onto PATH means nothing to a launcher that renamed
+    // the program — that launcher is already the thing on PATH.
+    ...(progName() === "cortex" ? [`  ${ex("cortex install")}              add cortex to PATH`] : []),
     "",
     "  --version                   print version",
     "  --help                      show help for any command",
   ];
-  return lines.join("\n");
+  return brand(lines.join("\n"));
 }
 
 export function renderNamespaceHelp(namespace: string, styler: Styler = NO_STYLE): string {
@@ -151,12 +154,12 @@ export function renderNamespaceHelp(namespace: string, styler: Styler = NO_STYLE
     lines.push(`  ${styler.cyan(cmdName.padEnd(12))}${doc.description}`);
   }
   lines.push("", `Run \`cortex ${namespace} <command> --help\` for details on any command.`);
-  return lines.join("\n");
+  return brand(lines.join("\n"));
 }
 
 export function renderCommandHelp(namespace: string, command: string, styler: Styler = NO_STYLE): string {
   const doc = NAMESPACES[namespace]?.[command];
-  if (!doc) return `unknown command 'cortex ${namespace} ${command}'`;
+  if (!doc) return brand(`unknown command 'cortex ${namespace} ${command}'`);
   const lines = [
     `cortex ${namespace} ${command} — ${doc.description}`,
     "",
@@ -170,7 +173,7 @@ export function renderCommandHelp(namespace: string, command: string, styler: St
     lines.push("", styler.bold("See also:"));
     for (const ref of doc.seeAlso) lines.push(`  ${styler.cyan(ref)}`);
   }
-  return lines.join("\n");
+  return brand(lines.join("\n"));
 }
 
 function describeNamespace(ns: string): string {

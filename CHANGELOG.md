@@ -18,6 +18,25 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.3] — 2026-10-07
+
+### Added
+
+- **`CORTEX_PROG_NAME` — the CLI names the command you actually typed.** Every
+  usage line, example and hint the CLI prints is written as `cortex …`, which is
+  wrong for a launcher that embeds it under another name: Mesh ships this CLI as
+  `mesh ctx`, where `cortex` is not a command at all, so `mesh ctx code nope`
+  answered `Run: cortex code --help`. A launcher now exports
+  `CORTEX_PROG_NAME="mesh ctx"`, and the help, tour, help topics, error
+  messages and hints, and empty-listing notes say `mesh ctx code --help`
+  instead. Only command-shaped text is rewritten — `cortex` followed by a
+  subcommand, a flag or a `<placeholder>` — so prose naming the product
+  ("cortex indexes your codebase", `cortex 2.4.3`) reads the same, and command
+  *output* (source, search hits) is never touched. Under a program name, the
+  top-level help also drops `cortex install`, which links a `cortex` onto PATH
+  and means nothing to a launcher that is already there. Unset, output is
+  byte-for-byte what it was.
+
 ## [2.4.2] — 2026-09-21
 
 ### Fixed
@@ -2846,6 +2865,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.3]: https://github.com/ruevu/cortex/releases/tag/v2.4.3
 [2.4.2]: https://github.com/ruevu/cortex/releases/tag/v2.4.2
 [2.4.1]: https://github.com/ruevu/cortex/releases/tag/v2.4.1
 [2.4.0]: https://github.com/ruevu/cortex/releases/tag/v2.4.0

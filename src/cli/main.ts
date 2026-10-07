@@ -21,9 +21,9 @@ import { runStalenessCommand } from "./commands/staleness.js";
 import { runSourceDriftCommand } from "./commands/source-drift.js";
 import { runBriefCommand } from "./commands/brief.js";
 import { runDoctorCommand } from "./commands/doctor.js";
+// Shared with prog.ts, whose rewrite keys on exactly these command words.
+import { NAMESPACES, META_COMMANDS } from "./prog.js";
 
-const NAMESPACES = ["code", "decision", "graph", "index", "eval", "todo"];
-const META_COMMANDS = ["tour", "help", "install", "setup", "freshness", "reconcile", "staleness", "source-drift", "brief", "doctor"];
 
 async function main(): Promise<void> {
   const argv = parseArgv(process.argv.slice(1)); // strip node arg too; arg 0 is the tsx/script

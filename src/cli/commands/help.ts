@@ -1,4 +1,5 @@
 import { UsageError } from "../errors.js";
+import { brand } from "../prog.js";
 
 const TOPICS: Record<string, string> = {
   "qualified-names": `qualified names — what they look like and why they matter
@@ -101,5 +102,5 @@ export function renderTopic(topic: string): string {
       `Try: ${Object.keys(TOPICS).map((t) => `cortex help ${t}`).join(", ")}`,
     );
   }
-  return text;
+  return brand(text);
 }

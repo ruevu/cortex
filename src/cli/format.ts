@@ -1,4 +1,5 @@
 import { makeStyler, supportsUnicode, type Styler } from "./style.js";
+import { brand } from "./prog.js";
 
 export type Row = Record<string, unknown>;
 export type Format = "table" | "json" | "plain";
@@ -96,7 +97,7 @@ export function writeRows(rows: Row[], format: Format, emptyMessage: string): vo
     if (format === "json") {
       process.stdout.write("[]\n");
     } else {
-      process.stderr.write(emptyMessage + "\n");
+      process.stderr.write(brand(emptyMessage) + "\n");
     }
     return;
   }
