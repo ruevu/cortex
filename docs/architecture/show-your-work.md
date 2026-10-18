@@ -51,7 +51,7 @@ mcp__cortex__decision           16 KB cap,                                      
 ```
 
 1. **Hook** — `hooks/show-presence.sh`, wired as two `PostToolUse` matchers
-   in `hooks/hooks.json`: one on `Read|Edit|Write|MultiEdit`, one on
+   in `hooks/hooks.json`: one on `Read|Edit|Write|MultiEdit|Bash`, one on
    `mcp__.*cortex.*__(get_code_snippet|context_pack|search_graph|trace_path|decision)`.
    Reads the tool-call JSON from stdin, maps it to an activity + ref (table
    below), and fire-and-forgets a `curl` POST. **Degrade-safe**: missing
@@ -107,6 +107,7 @@ mcp__cortex__decision           16 KB cap,                                      
 |---|---|---|---|
 | `Read` | `studied` | file path (repo-relative) | |
 | `Edit`, `Write`, `MultiEdit` | `edited` | file path (repo-relative) | |
+| `Bash` running `cat` / `sed` / `awk` | `studied` (`edited` for `sed -i`) | every existing file operand (repo-relative, ≤50) | Tokenized with shell quoting via `xargs`; follows `cd`, splits on `;` `&&` `\|\|` `\|`, skips options and `>` redirect targets. Files outside the first file's repo are dropped. A mixed command posts one beacon per activity. Any other command exits 0. |
 | `mcp__*cortex*__get_code_snippet`, `context_pack`, `search_graph` | `studied` | `tool_input.qualified_name` or `.name_pattern` | |
 | `mcp__*cortex*__trace_path` | `traced` | `tool_input.function_name` | |
 | `mcp__*cortex*__decision` | `consulted` | `tool_input.qualified_name` / `.decision_id` / `.id` | **`action` gated to `why`\|`get` only** — any other `action` (`create`/`update`/`link`/…) exits 0 without posting. See "no-double-coverage" below. |

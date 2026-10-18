@@ -91,6 +91,45 @@ describe('show-presence hook', () => {
     expect(bodies).toHaveLength(0);
   });
 
+  describe('Bash file readers', () => {
+    const bash = (command: string) =>
+      runHook({ session_id: 'sess-1', tool_name: 'Bash', tool_input: { command }, cwd: repo });
+    const quiet = () => new Promise((r) => setTimeout(r, 400));
+
+    it('cat / sed -n / awk → studied, refs resolved against cwd', async () => {
+      for (const cmd of ['cat src/a.ts', "sed -n '1,20p' src/a.ts", "awk '{ print $1; n++ }' src/a.ts"]) {
+        bodies = [];
+        bash(cmd);
+        await waitFor(1);
+        expect(bodies[0]?.body, cmd).toMatchObject({ activity: 'studied', refs: ['src/a.ts'] });
+      }
+    });
+
+    it('follows a cd, and finds the reader past a pipe and an &&', async () => {
+      bodies = [];
+      bash(`cd ${join(repo, 'src')} && sed -n 1p a.ts | head -5`);
+      await waitFor(1);
+      expect(bodies[0]?.body).toMatchObject({ activity: 'studied', refs: ['src/a.ts'] });
+    });
+
+    it('sed -i → edited', async () => {
+      bodies = [];
+      bash("sed -i '' 's/x/x/' src/a.ts");
+      await waitFor(1);
+      expect(bodies[0]?.body).toMatchObject({ activity: 'edited', refs: ['src/a.ts'] });
+    });
+
+    it('drops redirect targets, non-files, other commands, and out-of-repo paths', async () => {
+      bodies = [];
+      bash('cat > src/a.ts');
+      bash('grep -rn foo src/a.ts');
+      bash('cat src/missing.ts /etc/hosts');
+      bash("echo 'unbalanced");
+      await quiet();
+      expect(bodies).toHaveLength(0);
+    });
+  });
+
   it('CORTEX_PRESENCE=0 disables', async () => {
     bodies = [];
     runHook({ session_id: 'sess-1', tool_name: 'Read', tool_input: { file_path: join(repo, 'src', 'a.ts') }, cwd: repo }, { CORTEX_PRESENCE: '0' });

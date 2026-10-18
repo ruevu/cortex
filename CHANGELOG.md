@@ -18,6 +18,20 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.4] — 2026-10-18
+
+### Added
+
+- **Presence sees files read through the shell.** An agent that reads with
+  `cat`, `sed` or `awk` instead of `Read` was invisible on the canvas: the
+  `show-presence` hook was never even matched on `Bash`. It now is, and every
+  existing file operand of a `cat`/`sed`/`awk` call beacons as `studied` —
+  `sed -i` as `edited`, posted as a separate beacon when a command does both.
+  The command is tokenized with shell quoting (`xargs`), follows `cd`, finds
+  the reader past `&&` / `;` / pipes, and skips options and `>` redirect
+  targets; files outside the first file's repo are dropped. Anything it cannot
+  parse, and every other command, is a silent `exit 0` as before.
+
 ## [2.4.3] — 2026-10-07
 
 ### Added
@@ -2865,6 +2879,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.4]: https://github.com/ruevu/cortex/releases/tag/v2.4.4
 [2.4.3]: https://github.com/ruevu/cortex/releases/tag/v2.4.3
 [2.4.2]: https://github.com/ruevu/cortex/releases/tag/v2.4.2
 [2.4.1]: https://github.com/ruevu/cortex/releases/tag/v2.4.1
