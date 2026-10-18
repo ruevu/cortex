@@ -151,6 +151,11 @@ export function createEngine({ canvas, store, callbacks = {}, isLight: isLightFn
   // synapses). Pure state like liveFx; the engine feeds it BFS paths over the
   // frame graph and pushes roster snapshots to React via onPresenceRoster.
   const presenceFx = createPresence({ reducedMotion });
+  // Embedder-supplied display name for a session, read at DRAW time so a name
+  // that changes (a rename, an identity that resolves after the beacon) shows
+  // on the next frame without waiting for that session's next beacon. Returns
+  // a string or null; null keeps the beacon's own `@{workspace}`.
+  let presenceLabeler = null;
   // Max stroke alpha for the two presence-heat tiers. Flash is the prominent
   // wide border; trail is the faint slow-decay outline (~1/3 of flash).
   const PRESENCE_FLASH_ALPHA = 0.35;
@@ -3076,7 +3081,11 @@ export function createEngine({ canvas, store, callbacks = {}, isLight: isLightFn
       ctx.font = '500 10px "Geist Mono", monospace';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      const username = `@${s.workspace ?? ''}`;
+      let label = null;
+      if (presenceLabeler) {
+        try { label = presenceLabeler(s.sessionId); } catch { label = null; }
+      }
+      const username = `@${typeof label === 'string' && label ? label : (s.workspace ?? '')}`;
       const labelW = ctx.measureText(username).width;
       const padX = 8;
       const glyphSize = 8;
@@ -3179,6 +3188,11 @@ export function createEngine({ canvas, store, callbacks = {}, isLight: isLightFn
   // shows as a stale frame — when adding a mutation, add its invalidate().
   let needsDraw = true;
   function invalidate() { needsDraw = true; }
+
+  function setPresenceLabeler(fn) {
+    presenceLabeler = typeof fn === 'function' ? fn : null;
+    invalidate();
+  }
 
   function animating(now) {
     // Camera lerp (setCamera animate / fitToFrames / settle springs).
@@ -3297,6 +3311,10 @@ export function createEngine({ canvas, store, callbacks = {}, isLight: isLightFn
     setData,
     applyLiveChanges,
     applyPresence,
+    // Name sessions at draw time: fn(sessionId) → string | null. Call again
+    // (with the same or a new fn) whenever the names it answers change — it
+    // also requests a redraw. null restores the `@{workspace}` default.
+    setPresenceLabeler,
     applySpotlight,
     setLayerPrefs,
     getLayerPrefs: () => ({ showFrames, showDecisions, showTodos, layerTint: layersOn, showPresence }),
