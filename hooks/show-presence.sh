@@ -10,21 +10,29 @@ command -v jq >/dev/null 2>&1 || exit 0
 
 PAYLOAD="$(cat)"; [ -n "$PAYLOAD" ] || exit 0
 
-TOOL="$(printf '%s' "$PAYLOAD" | jq -r '.tool_name // empty' 2>/dev/null)"
-SESSION="$(printf '%s' "$PAYLOAD" | jq -r '.session_id // empty' 2>/dev/null)"
+# One jq for the envelope, joined on the unit separator: a non-whitespace IFS,
+# so an empty field stays empty instead of collapsing into its neighbour.
+IFS=$'\x1f' read -r TOOL SESSION CWD0 <<< "$(printf '%s' "$PAYLOAD" | jq -r '[.tool_name // "", .session_id // "", .cwd // ""] | join("\u001f")' 2>/dev/null)"
 [ -n "$TOOL" ] && [ -n "$SESSION" ] || exit 0
 
 ACTIVITY="" REF="" ROOT=""
 STUDIED=() EDITED=()   # Bash only: repo-relative refs, one beacon per non-empty list
+MAX_REFS=50            # the /api/presence schema's cap
 
-# Bash: resolve one candidate path (relative to $1) to a repo-relative ref.
-# The first file seen fixes ROOT; a file in any other repo is dropped, since one
-# beacon names one checkout. Sets R (empty for a non-file or an out-of-scope
-# path) rather than printing, because a $(…) subshell would lose ROOT.
-bash_ref() {
+# Resolve one candidate path to a repo-relative ref. Relative paths resolve
+# against $1, then against the session cwd: a hook payload's cwd may already be
+# where a `cd` in the command left the shell, so applying that `cd` again would
+# miss. An unset ROOT is fixed by the first file found; a file outside ROOT is
+# dropped, since one beacon names one checkout. Sets R (empty on a miss) rather
+# than printing, because a $(…) subshell would lose ROOT.
+file_ref() {
   local d="$1" f="$2" r dd
   R=""
-  case "$f" in /*) ;; "~"/*) f="$HOME/${f#"~/"}" ;; *) f="$d/$f" ;; esac
+  case "$f" in
+    /*) ;;
+    "~"/*) f="$HOME/${f#"~/"}" ;;
+    *) if [ -f "$d/$f" ]; then f="$d/$f"; else f="$CWD0/$f"; fi ;;
+  esac
   [ -f "$f" ] || return 0
   dd="$(cd "$(dirname "$f")" 2>/dev/null && pwd -P)"; [ -n "$dd" ] || return 0
   f="$dd/$(basename "$f")"
@@ -35,17 +43,30 @@ bash_ref() {
   case "$f" in "$ROOT"/*) R="${f#"$ROOT"/}" ;; esac
 }
 
+# Bash: drop heredoc bodies. Their lines are data, not commands — a script
+# written with `cat > x.sh <<EOF` must not read as the commands inside it.
+# Here-strings (`<<<`) introduce no body and are masked before matching.
+strip_heredocs() {
+  local line probe trimmed delim="" re='<<-?[[:space:]]*["'"'"']?([A-Za-z_][A-Za-z0-9_]*)'
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ -n "$delim" ]; then
+      trimmed="${line#"${line%%[![:space:]]*}"}"   # <<- allows leading tabs
+      if [ "$line" = "$delim" ] || [ "$trimmed" = "$delim" ]; then delim=""; fi
+      continue
+    fi
+    probe="${line//<<</ }"
+    if [[ $probe =~ $re ]]; then delim="${BASH_REMATCH[1]}"; fi
+    printf '%s\n' "$line"
+  done
+}
+
 case "$TOOL" in
   Read|Edit|Write|MultiEdit)
     FILE="$(printf '%s' "$PAYLOAD" | jq -r '.tool_input.file_path // empty' 2>/dev/null)"
     [ -n "$FILE" ] || exit 0
-    ROOT="$(git -C "$(dirname "$FILE")" rev-parse --show-toplevel 2>/dev/null)"
-    [ -n "$ROOT" ] || exit 0
-    # Canonicalize both sides (macOS /tmp → /private/tmp) so the prefix strip works.
-    _R="$(cd "$ROOT" 2>/dev/null && pwd -P)"; [ -n "$_R" ] && ROOT="$_R"
-    _D="$(cd "$(dirname "$FILE")" 2>/dev/null && pwd -P)"; [ -n "$_D" ] && FILE="$_D/$(basename "$FILE")"
-    case "$FILE" in "$ROOT"/*) ;; *) exit 0 ;; esac   # scope filter: outside repo → drop
-    REF="${FILE#"$ROOT"/}"
+    file_ref "$(dirname "$FILE")" "$FILE"     # scope filter: outside repo → no R
+    [ -n "$R" ] || exit 0
+    REF="$R"
     case "$TOOL" in Read) ACTIVITY="studied" ;; *) ACTIVITY="edited" ;; esac
     ;;
   mcp__*cortex*__get_code_snippet|mcp__*cortex*__context_pack|mcp__*cortex*__search_graph|\
@@ -68,24 +89,51 @@ case "$TOOL" in
     ;;
   Bash)
     # The file readers an agent reaches for instead of Read — `cat`, `sed`, `awk`
-    # — are studied files like any other; `sed -i` is an edit. Everything else a
-    # shell does is not presence, so anything unrecognised drops silently.
+    # — are studied files like any other; in-place `sed`/`gawk` is an edit.
+    # Everything else a shell does is not presence, and drops silently.
+    [ -n "$CWD0" ] || exit 0
     CMD="$(printf '%s' "$PAYLOAD" | jq -r '.tool_input.command // empty' 2>/dev/null)"
-    DIR="$(printf '%s' "$PAYLOAD" | jq -r '.cwd // empty' 2>/dev/null)"
-    [ -n "$CMD" ] && [ -n "$DIR" ] || exit 0
-    case "$CMD" in *cat*|*sed*|*awk*) ;; *) exit 0 ;; esac   # cheap pre-filter
+    [ -n "$CMD" ] || exit 0
+    # Cheap pre-filter: a reader must appear as a command WORD, not a substring.
+    PRE='(^|[[:space:];&|(/])(cat|sed|gsed|awk|gawk|nawk|mawk)([[:space:]]|$)'
+    [[ $CMD =~ $PRE ]] || exit 0
+    CMD="$(printf '%s\n' "$CMD" | strip_heredocs)"
+    # Fd redirects (`2>&1`, `>&2`, `&>f`) carry an `&` that is not a separator;
+    # mask them so padding cannot split them. The masked token still contains
+    # `>` and is dropped as a redirect below.
+    CMD="${CMD//>&/>__FD__}"; CMD="${CMD//&>/__FD__>}"; CMD="${CMD//<&/<__FD__}"
     # Pad the separators into their own words, then let xargs tokenize with the
-    # shell's quoting rules. A command it cannot parse (unbalanced quotes, a
-    # heredoc body) tokenizes to nothing, which drops it — never a wrong ref.
+    # shell's quoting rules. A command it cannot parse (unbalanced quotes)
+    # tokenizes to nothing, which drops it — never a wrong ref.
     CMD="${CMD//$'\n'/ ; }"; CMD="${CMD//;/ ; }"; CMD="${CMD//|/ | }"; CMD="${CMD//&/ & }"
+    CMD="${CMD//(/ ( }"; CMD="${CMD//)/ ) }"
     TOKENS="$(printf '%s' "$CMD" | xargs printf '%s\n' 2>/dev/null)" || exit 0
-    WORD="" INPLACE=0 SKIP=0
+    # Seed the checkout from the session's cwd, so a stray operand in another
+    # repo cannot claim the beacon and drop the session's own files.
+    _R="$(git -C "$CWD0" rev-parse --show-toplevel 2>/dev/null)"
+    [ -n "$_R" ] && ROOT="$(cd "$_R" 2>/dev/null && pwd -P)"
+    DIR="$CWD0" WORD="" INPLACE=0 SKIP=0 AWKINC=0 CUR=() SEEN=$'\n' TOTAL=0
+    # A command's files are classed when the command ENDS, so `-i` counts
+    # wherever it sits among the operands.
+    flush() {
+      local f
+      for f in "${CUR[@]}"; do
+        if [ "$INPLACE" = 1 ]; then EDITED+=("$f"); else STUDIED+=("$f"); fi
+      done
+      CUR=() WORD="" INPLACE=0 SKIP=0 AWKINC=0
+    }
     while IFS= read -r T; do
-      case "$T" in ';'|'&'|'|') WORD="" INPLACE=0 SKIP=0; continue ;; esac
+      case "$T" in ';'|'&'|'|'|'('|')') flush; continue ;; esac
       [ "$SKIP" = 1 ] && { SKIP=0; continue; }
-      # Output redirection names a file written, not read: drop the operator
-      # and, when detached (`> out`), the target after it.
-      case "$T" in *'>') SKIP=1; continue ;; *'>'*) continue ;; esac
+      case "$T" in
+        # Heredoc / here-string operators: what follows is data, not a file.
+        '<<'|'<<-'|'<<<') SKIP=1; continue ;;
+        '<<'*) continue ;;
+        # Output redirection names a file written, not read: drop the operator
+        # and, when detached (`> out`), the target after it.
+        *'>') SKIP=1; continue ;;
+        *'>'*) continue ;;
+      esac
       if [ -z "$WORD" ]; then
         case "$T" in *=*) continue ;; esac   # FOO=bar prefix assignments
         WORD="${T##*/}"; continue            # /usr/bin/sed → sed
@@ -95,17 +143,26 @@ case "$TOOL" in
           case "$T" in /*) DIR="$T" ;; "~") DIR="$HOME" ;; "~"/*) DIR="$HOME/${T#"~/"}" ;; *) DIR="$DIR/$T" ;; esac
           WORD="cd:done" ;;
         cat|sed|gsed|awk|gawk|nawk|mawk)
-          case "$T" in
-            -i*|--in-place*) [ "${WORD%sed}" != "$WORD" ] && INPLACE=1 ;;
-            -*|'<') ;;
+          if [ "$AWKINC" = 1 ]; then
+            AWKINC=0; case "$T" in inplace|inplace.awk) INPLACE=1 ;; esac; continue
+          fi
+          case "$WORD:$T" in
+            *sed:--in-place*) INPLACE=1 ;;
+            *sed:--*) ;;
+            *sed:-*i*) INPLACE=1 ;;                         # -i, -Ei, -ni, -i.bak
+            *awk:-i|*awk:--include) AWKINC=1 ;;             # gawk -i inplace
+            *awk:-iinplace*|*awk:--include=inplace*) INPLACE=1 ;;
+            *:-*|*:'<') ;;
             *)
-              bash_ref "$DIR" "${T#<}"
-              if [ -n "$R" ]; then
-                if [ "$INPLACE" = 1 ]; then EDITED+=("$R"); else STUDIED+=("$R"); fi
-              fi ;;
+              [ "$TOTAL" -lt "$MAX_REFS" ] || continue
+              file_ref "$DIR" "${T#<}"
+              [ -n "$R" ] || continue
+              case "$SEEN" in *$'\n'"$R"$'\n'*) continue ;; esac
+              SEEN="$SEEN$R"$'\n'; TOTAL=$((TOTAL + 1)); CUR+=("$R") ;;
           esac ;;
       esac
     done <<< "$TOKENS"
+    flush
     [ "${#STUDIED[@]}" -gt 0 ] || [ "${#EDITED[@]}" -gt 0 ] || exit 0
     ;;
   *) exit 0 ;;
@@ -114,12 +171,12 @@ esac
 [ -n "$ROOT" ] || exit 0
 WORKSPACE="$(basename "$ROOT")"
 
-# One beacon per activity; refs capped at the schema's 50.
+# One beacon per activity. Refs travel as positional args, never re-split.
 beacon() {
   local a="$1"; shift
   [ "$#" -gt 0 ] || return 0
-  printf '%s\n' "$@" | head -50 | jq -R . | jq -cs --arg s "$SESSION" --arg r "$ROOT" --arg w "$WORKSPACE" --arg a "$a" \
-    '{session_id:$s, repo_path:$r, workspace:$w, activity:$a, refs:.}'
+  jq -cn --arg s "$SESSION" --arg r "$ROOT" --arg w "$WORKSPACE" --arg a "$a" \
+    '{session_id:$s, repo_path:$r, workspace:$w, activity:$a, refs:$ARGS.positional}' --args "$@"
 }
 BODIES=()
 if [ "$TOOL" = "Bash" ]; then

@@ -18,6 +18,34 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.5] — 2026-10-18
+
+### Added
+
+- **`engine.setPresenceLabeler(fn)` — an embedder can name presence sessions.**
+  `fn(sessionId) → string | null` is read at draw time for each cursor's name
+  pill, so a name that changes after a session's last beacon (a rename, an
+  identity that resolves late) shows on the next frame. `null` keeps
+  `@{workspace}`. Mesh uses it to name a session by the thread that spawned it.
+
+### Fixed
+
+- **Presence's Bash parsing, after review of 2.4.4.**
+  - **Heredoc bodies** are stripped before parsing. A script written with
+    `cat > x.sh <<EOF` no longer reports the commands inside it as reads or
+    edits.
+  - **In-place edits** are recognised however the flag is spelled (`-Ei`,
+    `-ni`, `-i.bak`, a trailing `-i`) and for `gawk -i inplace`.
+  - **A relative `cd`** also resolves against the cwd the hook receives, which
+    may already be where the `cd` left the shell.
+  - **The beacon's checkout** comes from the session's cwd, so an operand in
+    another repo can no longer claim it and drop the session's own files.
+  - **Fd redirects** (`2>&1`, `>&2`, `&>`) no longer cut a command short.
+  - **Refs** are de-duplicated and capped at 50 as they are collected.
+  - **Lighter hook:** one `jq` call for the envelope, and a word-boundary
+    pre-filter, so `based` or `concat` no longer pass it.
+  - **MCP refs** containing a newline are no longer split into several refs.
+
 ## [2.4.4] — 2026-10-18
 
 ### Added
@@ -2879,6 +2907,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.5]: https://github.com/ruevu/cortex/releases/tag/v2.4.5
 [2.4.4]: https://github.com/ruevu/cortex/releases/tag/v2.4.4
 [2.4.3]: https://github.com/ruevu/cortex/releases/tag/v2.4.3
 [2.4.2]: https://github.com/ruevu/cortex/releases/tag/v2.4.2
