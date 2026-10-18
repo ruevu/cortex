@@ -107,7 +107,7 @@ mcp__cortex__decision           16 KB cap,                                      
 |---|---|---|---|
 | `Read` | `studied` | file path (repo-relative) | |
 | `Edit`, `Write`, `MultiEdit` | `edited` | file path (repo-relative) | |
-| `Bash` running `cat` / `sed` / `awk` | `studied` (`edited` for `sed -i`) | every existing file operand (repo-relative, ≤50) | Tokenized with shell quoting via `xargs`; follows `cd`, splits on `;` `&&` `\|\|` `\|`, skips options and `>` redirect targets. Files outside the first file's repo are dropped. A mixed command posts one beacon per activity. Any other command exits 0. |
+| `Bash` running `cat` / `sed` / `awk` | `studied` (`edited` for in-place `sed -i`/`-Ei`/… and `gawk -i inplace`) | every existing file operand, repo-relative, de-duplicated, ≤50 | Heredoc bodies are stripped first (they are data). Tokenized with shell quoting via `xargs`; follows `cd` (a relative path also resolves against the payload cwd, which may already be post-`cd`); splits on `;` `&&` `\|\|` `\|` and parens; fd redirects (`2>&1`, `&>`) are kept whole; options and `>` targets are skipped. The checkout is seeded from the session cwd, so a stray operand in another repo is dropped rather than claiming the beacon. A command's files are classed when it ends, so `-i` counts wherever it sits; a mixed command posts one beacon per activity. Any other command exits 0. |
 | `mcp__*cortex*__get_code_snippet`, `context_pack`, `search_graph` | `studied` | `tool_input.qualified_name` or `.name_pattern` | |
 | `mcp__*cortex*__trace_path` | `traced` | `tool_input.function_name` | |
 | `mcp__*cortex*__decision` | `consulted` | `tool_input.qualified_name` / `.decision_id` / `.id` | **`action` gated to `why`\|`get` only** — any other `action` (`create`/`update`/`link`/…) exits 0 without posting. See "no-double-coverage" below. |
@@ -290,6 +290,13 @@ composes into the presence pipeline:
   path via `frameBfsPath` over `FRAME_ADJ` and hands it to `presenceFx.setPath`
   (falling back to a direct 1-hop "path" when no route exists or there's no
   prior position). Inert until events arrive: an empty roster draws nothing.
+- **`setPresenceLabeler(fn)`** (public engine method) — `fn(sessionId) →
+  string | null`, read at **draw** time for each cursor's name pill; `null`
+  (or no labeler) keeps the beacon's `@{workspace}`. Lets an embedder that
+  knows more about a session than the hook does — Mesh names it by the thread
+  that spawned it — show that name, including one that changes after the
+  session's last beacon. Calling it again requests a redraw, which is how an
+  embedder signals that its names changed. Throws from `fn` are swallowed.
 - **`drawPresence(now)`** — called last from `mainLoop`, gated on the
   `showPresence` layer pref. Draws, in order:
   - **Synapse pulses** — a bright head + fading trail in the moving
