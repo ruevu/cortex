@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { resolve } from "node:path";
 import Database from "better-sqlite3";
 import type { ProjectContext } from "../context.js";
-import { UsageError } from "../errors.js";
+import { DomainError, UsageError } from "../errors.js";
 import { indexerBinPath } from "../paths.js";
 import { unwrapIndexerResult, renderIndexerResult } from "../indexer-output.js";
 import { startSpinner } from "../style.js";
@@ -12,7 +12,7 @@ import { runContractExtraction } from "../../contracts/run-contracts.js";
 import type { ContractResult } from "../../contracts/types.js";
 import { deriveProjectName } from "../../frame-extraction/cluster-tfidf-hdbscan.js";
 import { resolveCortexDbPath } from "../../db/resolve-path.js";
-import { readIndexedProject, renderIndexedProject } from "../../db/index-status.js";
+import { readIndexStatus, renderIndexStatus } from "../../db/index-status.js";
 import { Registry } from "../../db/registry.js";
 import { captureIndexMeta } from "../../graph/capture-index-meta.js";
 import { runStalenessSweep } from "../../staleness/run-sweep.js";
@@ -173,21 +173,20 @@ export async function runIndexCommand(cmd: IndexCommand, ctx: ProjectContext): P
   }
   switch (cmd.command) {
     case "status": {
-      // The repo's own .cortex/db first — the store `cortex index` writes and
-      // every other command reads (see readIndexedProject for why asking the
-      // indexer by name alone was wrong). The indexer is only asked after
-      // that, for a repo indexed before .cortex/db existed, which only the
-      // legacy shared cache knows about.
+      // Read the store every other command reads — ctx.graphDbPath, from
+      // resolveGraphDbForRead: .cortex/db, else the legacy .cortex/graph.db or
+      // shared slug cache. Asking the indexer by name with no DB pinned only
+      // ever reached the shared cache, which `cortex index` reaps once it has
+      // published .cortex/db (see readIndexStatus).
       const repoPath = ctx.gitRoot;
       if (!repoPath) {
         throw new UsageError("not in a git repository", "Run 'cortex index status' from inside a git repo");
       }
-      const indexed = readIndexedProject(repoPath);
-      if (indexed) {
-        process.stdout.write(renderIndexedProject(indexed) + "\n");
-        return;
-      }
-      shell("index_status", { project: ctx.projectName ?? "" });
+      const reindex = "cortex index .  (to index the current repo)";
+      if (!ctx.graphDbPath) throw new DomainError("this checkout is not indexed", reindex);
+      const status = readIndexStatus(ctx.graphDbPath, repoPath);
+      if (!status) throw new DomainError(`this checkout is not indexed: ${ctx.graphDbPath} holds no index`, reindex);
+      process.stdout.write(renderIndexStatus(status) + "\n");
       return;
     }
     case "changes": {

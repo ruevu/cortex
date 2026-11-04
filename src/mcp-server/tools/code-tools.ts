@@ -18,7 +18,7 @@ import { normalize, denormalize } from "../qualified-name.js";
 import { projectFromCtx, readSnippet } from "./code-tools-shared.js";
 import { registerContextPackTool } from "./context-pack.js";
 import { resolveInput } from "../../shared/resolve-input.js";
-import { resolveCortexDbPath, resolveDecisionsDbPath, legacyDecisionsDbPath } from "../../db/resolve-path.js";
+import { resolveCortexDbPath, resolveDecisionsDbPath, legacyDecisionsDbPath, resolveGraphDbForRead } from "../../db/resolve-path.js";
 import { worktreeRoot, mainWorktreeRoot } from "../../db/git-root.js";
 import { gitBranch } from "../../git/worktree-state.js";
 import { openDecisionsDb } from "../../decisions/db.js";
@@ -36,7 +36,7 @@ import {
 } from "../../graph/code-search.js";
 import type { SearchExecError, SearchExecOutcome } from "../../graph/code-search.js";
 import { Registry } from "../../db/registry.js";
-import { readIndexedProject, renderIndexedProject } from "../../db/index-status.js";
+import { readIndexStatus, renderIndexStatus } from "../../db/index-status.js";
 import { captureIndexMeta } from "../../graph/capture-index-meta.js";
 import { runStalenessSweep } from "../../staleness/run-sweep.js";
 import { invalidateFreshness } from "../freshness.js";
@@ -922,12 +922,15 @@ export function registerCodeTools(
       async (_resolver, args) => {
         const repoPath = args.repo_path!;
 
-        // (a) addressed repo's .cortex/db (fast path). Shared with
+        // (a) the addressed checkout's own store — the one every read uses
+        // (.cortex/db, else the legacy graph.db / slug cache). Shared with
         // `cortex index status`, so the two surfaces cannot disagree. Doesn't
         // go through the resolver — a corrupt/empty DB answers null and falls
-        // through to the cache rather than throwing.
-        const indexed = readIndexedProject(repoPath);
-        if (indexed) return ok(renderIndexedProject(indexed));
+        // through to the cache rather than throwing. A store carrying another
+        // checkout's identity answers with a warning line saying so.
+        const dbPath = resolveGraphDbForRead(repoPath);
+        const status = dbPath ? readIndexStatus(dbPath, repoPath) : null;
+        if (status) return ok(renderIndexStatus(status));
 
         // (b) shared indexer cache (covers repos indexed via the CLI from
         // some other server lifetime).
