@@ -18,6 +18,34 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.6] — 2026-11-04
+
+### Fixed
+
+- **`cortex index status` says an indexed repo is indexed.** It asked the
+  indexer by project name with no store pinned, which only looked in the
+  legacy shared cache — and `cortex index` clears that cache once it has
+  written the repo's own `.cortex/db`. So in any repo indexed the current way
+  it answered "project not found or not indexed", while `code find` and
+  `index list` saw the index in the same directory. It now reads the store
+  every other command reads (`.cortex/db`, else the legacy `.cortex/graph.db`
+  or shared cache), through the same check the MCP `index_status` tool now
+  makes, so the two cannot disagree.
+
+### Changed
+
+- **`index status` / `index_status` report counts and identity.** Both print
+  `Indexed: <name> at <root> (<n> nodes, <m> edges, last: <ts>)`, so the
+  CLI's answer is a line rather than the indexer's JSON, and the MCP tool's
+  gains the counts. When the store carries another checkout's identity —
+  copied in, or left behind by a checkout that has moved — a `Warning:` line
+  now says so; previously both reported it as this checkout's index.
+  `index_status` also resolves the legacy stores and answers for the
+  enclosing checkout when given a subdirectory.
+- **`cortex index status` exit codes.** Not indexed (or an empty store) exits
+  3 with `cortex index .` as the next step; outside a git repository it is a
+  usage error (exit 2) rather than a query about a project with no name.
+
 ## [2.4.5] — 2026-10-18
 
 ### Added
@@ -2907,6 +2935,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.6]: https://github.com/ruevu/cortex/releases/tag/v2.4.6
 [2.4.5]: https://github.com/ruevu/cortex/releases/tag/v2.4.5
 [2.4.4]: https://github.com/ruevu/cortex/releases/tag/v2.4.4
 [2.4.3]: https://github.com/ruevu/cortex/releases/tag/v2.4.3

@@ -372,6 +372,13 @@ graph and the decision sidecar. Computed TS-side (no indexer round-trip).
 Check whether a repo is indexed.
 - **Params:** `repo_path`. Registered `allowUnindexed` (answering "no" is a
   valid result).
+- **Answers:** `Indexed: <name> at <root> (<n> nodes, <m> edges, last: <ts>)`,
+  read from the same store every other read uses (`.cortex/db`, else the
+  legacy `.cortex/graph.db` / shared slug cache) — so a subdirectory
+  `repo_path` answers for its checkout. When that store carries another
+  checkout's identity (copied in, or left by a checkout that has moved) a
+  second `Warning:` line says so: reads still answer from it, but under the
+  other checkout's name and root. `cortex index status` prints the same lines.
 - **Why:** the SessionStart check and the first thing to run in a new repo.
 
 ### `list_projects` *(crossRepo)*

@@ -18,7 +18,7 @@ import { normalize, denormalize } from "../qualified-name.js";
 import { projectFromCtx, readSnippet } from "./code-tools-shared.js";
 import { registerContextPackTool } from "./context-pack.js";
 import { resolveInput } from "../../shared/resolve-input.js";
-import { resolveCortexDbPath, resolveDecisionsDbPath, legacyDecisionsDbPath } from "../../db/resolve-path.js";
+import { resolveCortexDbPath, resolveDecisionsDbPath, legacyDecisionsDbPath, resolveGraphDbForRead } from "../../db/resolve-path.js";
 import { worktreeRoot, mainWorktreeRoot } from "../../db/git-root.js";
 import { gitBranch } from "../../git/worktree-state.js";
 import { openDecisionsDb } from "../../decisions/db.js";
@@ -36,6 +36,7 @@ import {
 } from "../../graph/code-search.js";
 import type { SearchExecError, SearchExecOutcome } from "../../graph/code-search.js";
 import { Registry } from "../../db/registry.js";
+import { readIndexStatus, renderIndexStatus } from "../../db/index-status.js";
 import { captureIndexMeta } from "../../graph/capture-index-meta.js";
 import { runStalenessSweep } from "../../staleness/run-sweep.js";
 import { invalidateFreshness } from "../freshness.js";
@@ -921,35 +922,15 @@ export function registerCodeTools(
       async (_resolver, args) => {
         const repoPath = args.repo_path!;
 
-        // (a) addressed repo's .cortex/db (fast path).
-        const addressedDbPath = resolveCortexDbPath(repoPath);
-        if (existsSync(addressedDbPath)) {
-          // Open a tiny read-only handle and inspect ctx_projects. Don't go
-          // through the resolver — we want to tolerate corrupt/empty DBs and
-          // fall through to cache, not throw.
-          try {
-            const probe = new Database(addressedDbPath, { readonly: true });
-            try {
-              const row = probe.prepare(
-                "SELECT name, root_path, indexed_at FROM ctx_projects WHERE root_path = ? LIMIT 1",
-              ).get(repoPath) as { name: string; root_path: string; indexed_at: string } | undefined;
-              if (row) {
-                return ok(`Indexed: ${row.name} at ${row.root_path} (last: ${row.indexed_at})`);
-              }
-              // ctx_projects may store a different root_path than the caller
-              // supplied (symlinks, fixtures). If the table has any row at
-              // all, this DB belongs to *some* project — report it.
-              const anyRow = probe.prepare(
-                "SELECT name, root_path, indexed_at FROM ctx_projects LIMIT 1",
-              ).get() as { name: string; root_path: string; indexed_at: string } | undefined;
-              if (anyRow) {
-                return ok(`Indexed: ${anyRow.name} at ${anyRow.root_path} (last: ${anyRow.indexed_at})`);
-              }
-            } finally {
-              probe.close();
-            }
-          } catch { /* fall through to cache */ }
-        }
+        // (a) the addressed checkout's own store — the one every read uses
+        // (.cortex/db, else the legacy graph.db / slug cache). Shared with
+        // `cortex index status`, so the two surfaces cannot disagree. Doesn't
+        // go through the resolver — a corrupt/empty DB answers null and falls
+        // through to the cache rather than throwing. A store carrying another
+        // checkout's identity answers with a warning line saying so.
+        const dbPath = resolveGraphDbForRead(repoPath);
+        const status = dbPath ? readIndexStatus(dbPath, repoPath) : null;
+        if (status) return ok(renderIndexStatus(status));
 
         // (b) shared indexer cache (covers repos indexed via the CLI from
         // some other server lifetime).

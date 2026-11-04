@@ -6,6 +6,9 @@ import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Registry } from "../../src/db/registry.js";
+import BetterSqlite3 from "better-sqlite3";
+import { cacheSlug } from "../../src/db/store-paths.js";
+import { worktreeRoot } from "../../src/db/git-root.js";
 
 describe("code-tools contract", () => {
   let h: HarnessContext;
@@ -338,6 +341,47 @@ describe("code-tools contract", () => {
       // The harness sets up its own indexed git root; query it directly.
       const res = await callTool(h, "index_status", { repo_path: h.repoPath });
       expect(res.content[0].text).toMatch(/^Indexed: /);
+    });
+
+    it("warns when the store carries another checkout's identity", async () => {
+      // The harness copies a store indexed at the fixture dir into its own
+      // repo, so by construction it carries the fixture's identity.
+      const res = await callTool(h, "index_status", { repo_path: h.repoPath });
+      expect(res.content[0].text).toMatch(/\nWarning: this store carries .*'s identity, not /);
+    });
+
+    it("answers a checkout's own store with counts and no warning, from a subdirectory too", async () => {
+      const root = makeIndexedRepoFixture();
+      try {
+        const slug = cacheSlug(worktreeRoot(root));
+        const db = new BetterSqlite3(join(root, ".cortex", "db"));
+        db.pragma("foreign_keys = OFF"); // re-stamping the identity the fixture was indexed under
+        db.prepare("UPDATE ctx_projects SET name = ?, root_path = ?").run(slug, worktreeRoot(root));
+        db.prepare("UPDATE nodes SET project = ?").run(slug);
+        db.prepare("UPDATE edges SET project = ?").run(slug);
+        db.close();
+        mkdirSync(join(root, "sub"));
+        for (const repo_path of [root, join(root, "sub")]) {
+          const text = (await callTool(h, "index_status", { repo_path })).content[0].text;
+          expect(text).toMatch(new RegExp(`^Indexed: ${slug} at .* \\([1-9]\\d* nodes, \\d+ edges, last: `));
+          expect(text).not.toContain("Warning");
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it("finds a repo indexed into the legacy .cortex/graph.db", async () => {
+      const root = mkdtempSync(join(tmpdir(), "cortex-graphdb-"));
+      try {
+        execSync(`git init -q "${root}"`, { stdio: "ignore" });
+        mkdirSync(join(root, ".cortex"));
+        copyFileSync(process.env.CORTEX_CONTRACT_CORTEX_DB!, join(root, ".cortex", "graph.db"));
+        const res = await callTool(h, "index_status", { repo_path: root });
+        expect(res.content[0].text).toMatch(/^Indexed: .* \([1-9]\d* nodes, /);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
     });
 
     it("empty: unknown path returns No results", async () => {
