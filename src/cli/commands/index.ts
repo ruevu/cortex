@@ -12,6 +12,7 @@ import { runContractExtraction } from "../../contracts/run-contracts.js";
 import type { ContractResult } from "../../contracts/types.js";
 import { deriveProjectName } from "../../frame-extraction/cluster-tfidf-hdbscan.js";
 import { resolveCortexDbPath } from "../../db/resolve-path.js";
+import { readIndexedProject, renderIndexedProject } from "../../db/index-status.js";
 import { Registry } from "../../db/registry.js";
 import { captureIndexMeta } from "../../graph/capture-index-meta.js";
 import { runStalenessSweep } from "../../staleness/run-sweep.js";
@@ -171,9 +172,24 @@ export async function runIndexCommand(cmd: IndexCommand, ctx: ProjectContext): P
     return;
   }
   switch (cmd.command) {
-    case "status":
+    case "status": {
+      // The repo's own .cortex/db first — the store `cortex index` writes and
+      // every other command reads (see readIndexedProject for why asking the
+      // indexer by name alone was wrong). The indexer is only asked after
+      // that, for a repo indexed before .cortex/db existed, which only the
+      // legacy shared cache knows about.
+      const repoPath = ctx.gitRoot;
+      if (!repoPath) {
+        throw new UsageError("not in a git repository", "Run 'cortex index status' from inside a git repo");
+      }
+      const indexed = readIndexedProject(repoPath);
+      if (indexed) {
+        process.stdout.write(renderIndexedProject(indexed) + "\n");
+        return;
+      }
       shell("index_status", { project: ctx.projectName ?? "" });
       return;
+    }
     case "changes": {
       // detect_changes now routes by repo_path + a pinned CORTEX_DB (per-call
       // routing), matching the MCP contract — it no longer resolves a project
