@@ -39,10 +39,20 @@ All notable changes to Cortex are documented here. The format follows
   A whitespace-only `description` counts as absent.
 - **`cortex decision propose` matches the MCP contract.** It takes
   `--description`, and needs it or `--resolution` instead of always requiring
-  `--problem` and `--resolution`.
+  `--problem` and `--resolution`. It also records the branch and commit it was
+  proposed from, as every other mutating CLI command already did.
+- **`todo` docs describe the real tool.** They documented params the tool does
+  not have (`title`, `status`, `references`, `limit`/`offset`, `todo_id`,
+  `note`) and called `link`'s required `relation` optional. Every action's
+  params are now listed from its schema.
 
 ### Changed
 
+- **One required-field check across `decision`, `pr`, `todo` and `show`.**
+  `todo` and `show` already refused missing fields, but through their own
+  throw-and-match path with different wording (`todo(get) requires 'id'`).
+  They now use the same per-action schema check, so every tool refuses with
+  `<tool> action '<action>': <field>: Required`.
 - **Now enforced:** `pr({action:"open"})` requires `author` and
   `pr({action:"touch"})` requires `pr_number`, `frame_id`, `node_name` and
   `change`, as documented. Calls that omitted them used to succeed with
