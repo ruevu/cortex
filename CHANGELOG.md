@@ -64,9 +64,9 @@ All notable changes to Cortex are documented here. The format follows
   qualified name after a `.` or a C++ `::`. Names compare case-sensitively; a
   path ignores case only when no file has that exact path, and a leading `/`
   or `./` on it is ignored.
-- **`.cortexignore` is documented.** The indexer has always skipped paths
-  matched by a `.cortexignore` at the repo root (gitignore syntax, on top of
-  `.gitignore`), but nothing said so. The README and the `index_repository`
+- **`.cortexignore` is documented.** Every indexer release Cortex has pinned
+  skips paths matched by a `.cortexignore` at the repo root (gitignore syntax,
+  on top of `.gitignore`), but nothing said so. The README and the `index_repository`
   reference now do, with the case for it: committed vendor or minified bundles
   otherwise become thousands of nodes whose calls bind to unrelated functions
   by name.
