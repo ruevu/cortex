@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import Database from "better-sqlite3";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -215,30 +216,55 @@ describe("shared resolveInput", () => {
     it("ignores a leading `/` or `./`", () => {
       const card = store.createNode({ kind: "module", name: "Card.vue", file_path: "apps/Card.vue", qualified_name: "test-project.apps.Card" });
       const mount = store.createNode({ kind: "function", name: "mount", file_path: "apps/Card.vue", qualified_name: "test-project.apps.Card.mount" });
-      expect(resolveInput("/apps/Card.vue", project, dbPath)).toMatchObject({ kind: "multi", total: 2 });
+      const whole = resolveInput("/apps/Card.vue", project, dbPath);
+      expect(whole.kind === "multi" && whole.candidates.map((c) => c.id).sort()).toEqual([card.id, mount.id].sort());
       expect(resolveInput("./apps/Card.vue:mount", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: mount.id } });
       expect(resolveInput("/apps/Card.vue::mount", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: mount.id } });
-      expect(card.id).not.toBe(mount.id);
+    });
+
+    it("a path that trims to nothing names nothing", () => {
+      store.createNode({ kind: "project", name: "test-project", file_path: "", qualified_name: "test-project" });
+      store.createNode({ kind: "folder", name: "src", file_path: "src/", qualified_name: "test-project.src" });
+      for (const input of ["/", "./", "//"]) expect(resolveInput(input, project, dbPath).kind).toBe("none");
     });
 
     it("matches a path ignoring case only when nothing matches it exactly", () => {
       const upper = store.createNode({ kind: "module", name: "Upper.ts", file_path: "src/Upper.ts", qualified_name: "test-project.src.Upper" });
-      expect(resolveInput("src/upper.ts", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: upper.id } });
+      const mount = store.createNode({ kind: "function", name: "mount", file_path: "src/Upper.ts", qualified_name: "test-project.src.Upper.mount" });
+      const folded = resolveInput("src/upper.ts", project, dbPath);
+      expect(folded.kind === "multi" && folded.candidates.map((c) => c.id).sort()).toEqual([upper.id, mount.id].sort());
+      expect(resolveInput("upper.TS:mount", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: mount.id } });
       const lower = store.createNode({ kind: "module", name: "upper.ts", file_path: "src/upper.ts", qualified_name: "test-project.src.upper" });
       expect(resolveInput("src/upper.ts", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: lower.id } });
-      expect(resolveInput("src/UPPER.ts", project, dbPath)).toMatchObject({ kind: "multi", total: 2 });
+      expect(resolveInput("src/UPPER.ts", project, dbPath)).toMatchObject({ kind: "multi", total: 3 });
+    });
+
+    it("never answers a symbol miss in one file out of a same-named file in another case", () => {
+      store.createNode({ kind: "module", name: "Upper.ts", file_path: "src/Upper.ts", qualified_name: "test-project.src.Upper" });
+      store.createNode({ kind: "function", name: "foo", file_path: "src/upper.ts", qualified_name: "test-project.src.upper.foo" });
+      expect(resolveInput("src/Upper.ts::foo", project, dbPath).kind).toBe("none");
+      expect(resolveInput("src/Upper.ts:foo", project, dbPath).kind).toBe("none");
+    });
+
+    it("a root file whose name starts like the project is still a display form", () => {
+      const def = store.createNode({ kind: "function", name: "default", file_path: "vite.config.ts", qualified_name: "vite.vite.config.default" });
+      expect(resolveInput("vite.config.ts::default", "vite", dbPath)).toMatchObject({ kind: "single", symbol: { id: def.id } });
     });
   });
 
-  it("rows sharing one qualified name resolve as that one symbol", () => {
-    const first = store.createNode({ kind: "function", name: "dup", file_path: "src/d.ts", qualified_name: "test-project.src.d.dup" });
-    store.createNode({ kind: "function", name: "dup", file_path: "src/d.ts", qualified_name: "test-project.src.d.dup" });
-    for (const p of [project, "some-other-name"]) {
-      const r = resolveInput("src/d.ts::dup", p, dbPath);
-      expect(r.kind).toBe("single");
+  it("rows sharing one qualified name resolve as that one symbol, the same one each time", () => {
+    // Inserted highest id first, so storage order disagrees with the id tiebreak.
+    const raw = new Database(dbPath);
+    const now = new Date().toISOString();
+    const insert = raw.prepare(
+      `INSERT INTO nodes (id, kind, name, qualified_name, file_path, data, tier, created_at, updated_at)
+       VALUES (?, 'function', 'dup', 'test-project.src.d.dup', 'src/d.ts', '{}', 'personal', ?, ?)`,
+    );
+    for (const id of ["dup-z", "dup-a"]) insert.run(id, now, now);
+    raw.close();
+    for (const [input, p] of [["src/d.ts::dup", project], ["src/d.ts::dup", "some-other-name"], ["dup", project]]) {
+      expect(resolveInput(input, p, dbPath)).toMatchObject({ kind: "single", symbol: { id: "dup-a" } });
     }
-    expect(resolveInput("dup", project, dbPath).kind).toBe("single");
-    expect(first.qualified_name).toBe("test-project.src.d.dup");
   });
 
   describe("suffixes match from a boundary, exactly", () => {
@@ -270,6 +296,15 @@ describe("shared resolveInput", () => {
       for (const input of ["Stream.readChar", "TokenList::Stream.readChar"]) {
         expect(resolveInput(input, project, dbPath)).toMatchObject({ kind: "single", symbol: { id: method.id } });
       }
+    });
+
+    it("a `::`-only scope suffix resolves whatever the node's own name holds", () => {
+      // An indexer may name the class `Stream` and carry its scopes only in the qn.
+      const cls = store.createNode({
+        kind: "class", name: "Stream", file_path: "vendored/simplecpp.cpp",
+        qualified_name: "test-project.vendored.simplecpp.simplecpp::TokenList::Stream",
+      });
+      expect(resolveInput("TokenList::Stream", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: cls.id } });
     });
   });
 

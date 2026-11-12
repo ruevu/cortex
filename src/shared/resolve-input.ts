@@ -25,7 +25,8 @@ export type ResolveResult =
  */
 export const MAX_CANDIDATES = 25;
 
-const SOURCE_EXTS = new RegExp("\\.(vue|tsx?|jsx?|py|go|rs|java|cs|cpp|c|h|rb|php|swift|kt)$");
+/** Case-insensitive, like the path matching it routes to: `Upper.TS` is a path. */
+const SOURCE_EXTS = /\.(vue|tsx?|jsx?|py|go|rs|java|cs|cpp|c|h|rb|php|swift|kt)$/i;
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const COLS = "id, qualified_name AS qn, file_path, kind";
 /** Not code symbols — mirrors CODE_KIND_FILTER in graph/code-queries.ts. */
@@ -43,6 +44,8 @@ const DEPTH =
 
 type Found = { rows: ResolvedSymbol[]; total: number };
 type Predicate = { sql: string; params: unknown[] };
+
+const NOTHING: Found = { rows: [], total: 0 };
 
 /**
  * Up to {@link MAX_CANDIDATES} rows of `select` — any query yielding `id, qn,
@@ -91,6 +94,23 @@ function pathIs(path: string, fold: boolean): Predicate {
 }
 
 /**
+ * The predicate under which `path` names files that exist in the graph:
+ * exact if any node has that path, else ASCII-case-folded if that matches,
+ * else null. Deciding on the path alone, before any symbol condition, is the
+ * point — folding after a symbol miss in `src/Upper.ts` would answer out of a
+ * different file, `src/upper.ts`. It also lets a path that names nothing end
+ * the step after two `LIMIT 1` probes.
+ */
+function pathMatch(store: GraphStore, path: string): Predicate | null {
+  if (path === "") return null;
+  for (const fold of [false, true]) {
+    const p = pathIs(path, fold);
+    if (store.queryRaw(`SELECT 1 FROM nodes WHERE ${p.sql} LIMIT 1`, p.params).length > 0) return p;
+  }
+  return null;
+}
+
+/**
  * SQL predicate: `qualified_name` ends with `tail` from a scope boundary — a
  * `.`, or the `::` of a C++ name — so `a.render` is never `…data.render`.
  */
@@ -134,6 +154,8 @@ function lookupByDisplayForm(
   const exact = find(store, `qualified_name = ? AND ${SYMBOL_KINDS}`, [exactQn], "id");
   if (exact.rows.length > 0) return exact;
 
+  const file = pathMatch(store, filePart);
+  if (!file) return NOTHING;
   // Per file, keep only the least-nested matches — every row from one file
   // shares its module prefix, so a depth difference is pure nesting. One
   // shallowest match is the definition the display form names (`render`, not
@@ -141,17 +163,12 @@ function lookupByDisplayForm(
   // `Bar.render`) and stay ambiguous: the resolver reports, it does not guess.
   // Done in SQL so `total` counts every file.
   const qnTail = qnEndsWith(symbol);
-  for (const fold of [false, true]) {
-    const file = pathIs(filePart, fold);
-    const shallowest = `SELECT id, qn, file_path, kind FROM (
-        SELECT ${COLS}, ${DEPTH} AS depth, MIN(${DEPTH}) OVER (PARTITION BY file_path) AS least
-        FROM nodes
-        WHERE ${file.sql} AND ${qnTail.sql} AND ${SYMBOL_KINDS} AND ${DEFINITION_KINDS}
-      ) WHERE depth = least`;
-    const found = findIn(store, shallowest, [...file.params, ...qnTail.params], "file_path, qn");
-    if (found.rows.length > 0) return found;
-  }
-  return { rows: [], total: 0 };
+  const shallowest = `SELECT id, qn, file_path, kind FROM (
+      SELECT ${COLS}, ${DEPTH} AS depth, MIN(${DEPTH}) OVER (PARTITION BY file_path) AS least
+      FROM nodes
+      WHERE ${file.sql} AND ${qnTail.sql} AND ${SYMBOL_KINDS} AND ${DEFINITION_KINDS}
+    ) WHERE depth = least`;
+  return findIn(store, shallowest, [...file.params, ...qnTail.params], "file_path, qn, id");
 }
 
 function splitFileSymbol(input: string): { filePath: string; symbol: string } | null {
@@ -169,79 +186,81 @@ function resolveWith(store: GraphStore, input: string, project: string): Found {
   // Suffix matching below starts at a boundary — a `/` in a path, a `.` or
   // `::` in a qn — so `Card.vue` is never `IdCard.vue` and `a.render` never
   // `data.render`. A suffix that only happened to match was a silent wrong
-  // answer whenever it was the sole match.
+  // answer whenever it was the sole match. Every ordering ends in `id`, so a
+  // tie — and with it the candidate list and its first row — is stable.
 
-  // 0. Display form `path::Symbol`, split at the FIRST `::`: a file path never
-  //    contains one, but a symbol can (C++ `ns::Class.method`). Only a first
-  //    part that could be a path — one with a `/` or an extension — is looked
-  //    up, and a miss falls through: a canonical qn or a plain name can
-  //    contain `::` too (`…simplecpp::TokenList::Stream.readChar`, a JSON key
-  //    `Fn::Join`). No step below matches a real display form, so that is safe.
-  const sep = input.indexOf("::");
-  if (sep > 0 && sep < input.length - 2) {
-    const filePart = trimPath(input.slice(0, sep));
-    if (!input.startsWith(`${project}.`) && /[/.]/.test(filePart)) {
-      const found = lookupByDisplayForm(store, project, filePart, input.slice(sep + 2));
-      if (found.rows.length > 0) return found;
-    }
-  }
-
-  // 0b. file:symbol form (editor-jump style, e.g. apps/foo/bar.ts:Baz)
-  const split = splitFileSymbol(input);
-  if (split) {
-    for (const fold of [false, true]) {
-      const file = pathIs(trimPath(split.filePath), fold);
-      const found = find(
-        store,
-        `${file.sql} AND name = ? AND ${SYMBOL_KINDS}`,
-        [...file.params, split.symbol],
-        "file_path, qn",
-      );
-      if (found.rows.length > 0) return found;
-    }
-  }
-
-  // 1. File path (contains '/' or ends in a source extension) — the whole
-  //    path or a trailing part of it.
-  if (input.includes("/") || SOURCE_EXTS.test(input)) {
-    for (const fold of [false, true]) {
-      const file = pathIs(trimPath(input), fold);
-      const found = find(store, `${file.sql} AND ${SYMBOL_KINDS}`, file.params, "file_path, qn");
-      if (found.rows.length > 0) return found;
-    }
-  }
-
-  // 2. Canonical qn (starts with project prefix)
+  // 1. Canonical qn (starts with the project prefix). Exact and indexed, so
+  //    it goes first: such a qn can contain `::` (C++) and would otherwise be
+  //    taken for a display form.
   if (input.startsWith(`${project}.`)) {
     const found = find(store, `qualified_name = ? AND ${SYMBOL_KINDS}`, [input], "id");
     if (found.rows.length > 0) return found;
   }
 
-  // 3. Dotted suffix (e.g. components.foo) — the whole qn or a trailing part.
-  if (input.includes(".") && !input.includes("/")) {
+  // 2. Display form `path::Symbol`, split at the FIRST `::`: a file path never
+  //    contains one, but a symbol can (C++ `ns::Class.method`). Only a first
+  //    part that could be a path — one with a `/` or a `.` — is looked up, and
+  //    a miss falls through: a plain name can contain `::` too
+  //    (`simplecpp::TokenList::Stream`, a JSON key `Fn::Join`). No step below
+  //    matches a real display form, so that is safe.
+  const sep = input.indexOf("::");
+  if (sep > 0 && sep < input.length - 2) {
+    const filePart = trimPath(input.slice(0, sep));
+    if (/[/.]/.test(filePart)) {
+      const found = lookupByDisplayForm(store, project, filePart, input.slice(sep + 2));
+      if (found.rows.length > 0) return found;
+    }
+  }
+
+  // 3. file:symbol form (editor-jump style, e.g. apps/foo/bar.ts:Baz)
+  const split = splitFileSymbol(input);
+  const splitFile = split && pathMatch(store, trimPath(split.filePath));
+  if (split && splitFile) {
+    const found = find(
+      store,
+      `${splitFile.sql} AND name = ? AND ${SYMBOL_KINDS}`,
+      [...splitFile.params, split.symbol],
+      "file_path, qn, id",
+    );
+    if (found.rows.length > 0) return found;
+  }
+
+  // 4. File path (contains '/' or ends in a source extension) — the whole
+  //    path or a trailing part of it. No file path contains `::`.
+  if ((input.includes("/") || SOURCE_EXTS.test(input)) && !input.includes("::")) {
+    const file = pathMatch(store, trimPath(input));
+    if (file) {
+      const found = find(store, `${file.sql} AND ${SYMBOL_KINDS}`, file.params, "file_path, qn, id");
+      if (found.rows.length > 0) return found;
+    }
+  }
+
+  // 5. A qualified-name suffix (`components.foo`, `TokenList::Stream`) — the
+  //    whole qn, or a trailing part from a `.` or `::`.
+  if ((input.includes(".") || input.includes("::")) && !input.includes("/")) {
     const exact = find(store, `qualified_name = ? AND ${SYMBOL_KINDS}`, [input], "id");
     if (exact.rows.length > 0) return exact;
     const tail = qnEndsWith(input);
-    const suffix = find(store, `${tail.sql} AND ${SYMBOL_KINDS}`, tail.params, "qn");
+    const suffix = find(store, `${tail.sql} AND ${SYMBOL_KINDS}`, tail.params, "qn, id");
     if (suffix.rows.length > 0) return suffix;
   }
 
-  // 4. Bare name — exact matches first, so `useInject` is not made ambiguous
+  // 6. Bare name — exact matches first, so `useInject` is not made ambiguous
   //    by `useInjectFoo`. Substring matches only when nothing is named exactly,
   //    and only for an input with no `/` or `.`: such an input names a path or
   //    a qn, and passing `IdCard.vue` off as `Card.vue` here would undo the
-  //    boundary matching above. (`TokenList::Stream` may still find
-  //    `simplecpp::TokenList::Stream`.)
-  const exact = find(store, `name = ? AND ${SYMBOL_KINDS}`, [input], "file_path, qn");
+  //    boundary matching above.
+  const exact = find(store, `name = ? AND ${SYMBOL_KINDS}`, [input], "file_path, qn, id");
   if (exact.rows.length > 0 || /[/.]/.test(input)) return exact;
-  return find(store, `name LIKE ? AND ${SYMBOL_KINDS}`, [`%${input}%`], "file_path, qn");
+  return find(store, `name LIKE ? AND ${SYMBOL_KINDS}`, [`%${input}%`], "file_path, qn, id");
 }
 
 /**
  * Rows that all carry one qualified name are one symbol as far as any caller
  * can tell: listing them would ask it to choose between identical IDs, and
  * the ID it sent back would resolve to the same list again. The indexer keeps
- * qualified names unique, so this is defensive; the first row is taken.
+ * qualified names unique, so this is defensive; the first row — lowest id,
+ * by every ordering's tiebreak — is taken.
  */
 function isOneSymbol(found: Found): boolean {
   return found.rows.length === found.total && found.rows.every((r) => r.qn === found.rows[0].qn);
