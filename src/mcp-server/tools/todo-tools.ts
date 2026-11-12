@@ -9,6 +9,7 @@ import { validatePrimitiveFields } from "./decision-input-validation.js";
 import { registerTool, type RepoContext, type RepoContextResolver } from "../repo-context.js";
 import type { EventBus } from "../../events/bus.js";
 import { RepoPathField } from "./shared-fields.js";
+import { checkActionArgs } from "./action-args.js";
 import { hashGovernedSource, type GovernedRef } from "../../decisions/reconciliation.js";
 
 const todoShape = {
@@ -60,10 +61,23 @@ const todoServiceFor = (ctx: RepoContext, projectId: string | null, bus?: EventB
   return { service, todos, links };
 };
 
-function need<T>(v: T | undefined, action: string, field: string): T {
-  if (v === undefined) throw new Error(`todo(${action}) requires '${field}'`);
-  return v;
-}
+/**
+ * Each action's own schema: the superset with that action's required fields
+ * made required, so there is no second copy of the field types to drift.
+ * Checked up front by checkActionArgs, the same check (and message shape) the
+ * decision and pr dispatchers use (T-0a40, D-vwwa). An exhaustive Record over
+ * the action enum, so a new action without an entry is a compile error. The
+ * switch below can therefore treat these fields as present.
+ */
+const TODO_ACTION_SCHEMAS: Record<TodoArgs["action"], z.ZodTypeAny> = {
+  propose: todoSchema.required({ summary: true }),
+  get: todoSchema.required({ id: true }),
+  list: todoSchema,
+  search: todoSchema.required({ query: true }),
+  update: todoSchema.required({ id: true }),
+  link: todoSchema.required({ id: true, target: true, relation: true }),
+  transition: todoSchema.required({ id: true, to: true }),
+};
 
 /** GOVERNS-only refs for a todo, in the shape hashGovernedSource expects.
  *  Mirrors governedRefs() in reconciliation-attach.ts (the decision-side
@@ -117,12 +131,14 @@ export const todoHandler = (resolver: RepoContextResolver, indexerProject: strin
           "thread filter cannot be empty — omit it to list/search unfiltered",
         );
       }
+      const missing = checkActionArgs("todo", args.action, TODO_ACTION_SCHEMAS[args.action], args);
+      if (missing) return missing;
       const svc = todoServiceFor(ctx, indexerProject, bus);
       try {
         switch (args.action) {
           case "propose": {
             const created = svc.service.propose({
-              summary: need(args.summary, "propose", "summary"),
+              summary: args.summary!,
               description: args.description,
               proposed_by: args.proposed_by,
               governs: args.governs,
@@ -147,7 +163,7 @@ export const todoHandler = (resolver: RepoContextResolver, indexerProject: strin
             return ok(JSON.stringify(created, null, 2));
           }
           case "get": {
-            const t = svc.service.getWithRefs(need(args.id, "get", "id"));
+            const t = svc.service.getWithRefs(args.id!);
             return t ? ok(JSON.stringify(t, null, 2)) : empty(`todo(get ${args.id})`);
           }
           case "list":
@@ -156,7 +172,7 @@ export const todoHandler = (resolver: RepoContextResolver, indexerProject: strin
             // there's no post-filter needed the way search() requires below.
             return ok(JSON.stringify(svc.service.list({ branch: args.branch, thread: args.thread }), null, 2));
           case "search": {
-            let r = svc.service.search(need(args.query, "search", "query"));
+            let r = svc.service.search(args.query!);
             if (args.branch !== undefined || args.thread !== undefined) {
               // search() maps through rowToTodo, which — like toDecision on
               // the decisions side — drops the origin_* columns. Look each
@@ -172,7 +188,7 @@ export const todoHandler = (resolver: RepoContextResolver, indexerProject: strin
             return r.length ? ok(JSON.stringify(r, null, 2)) : empty(`todo(search ${args.query})`);
           }
           case "update": {
-            const updated = svc.service.update(need(args.id, "update", "id"), {
+            const updated = svc.service.update(args.id!, {
               summary: args.summary,
               description: args.description,
               assignee: args.assignee,
@@ -190,11 +206,11 @@ export const todoHandler = (resolver: RepoContextResolver, indexerProject: strin
           }
           case "link": {
             const origin = captureOrigin(ctx.repoPath);
-            const todoId = need(args.id, "link", "id");
-            const relation = need(args.relation, "link", "relation");
+            const todoId = args.id!;
+            const relation = args.relation!;
             svc.service.link({
               todo_id: todoId,
-              target: need(args.target, "link", "target"),
+              target: args.target!,
               relation,
             }, origin);
             // Only GOVERNS changes the governed set; the other relations are
@@ -210,8 +226,8 @@ export const todoHandler = (resolver: RepoContextResolver, indexerProject: strin
           case "transition":
             return ok(
               JSON.stringify(
-                svc.service.transition(need(args.id, "transition", "id"), {
-                  to: need(args.to, "transition", "to"),
+                svc.service.transition(args.id!, {
+                  to: args.to!,
                   reason: args.reason,
                   resolved_by: args.resolved_by,
                   blocked_by: args.blocked_by,
@@ -225,7 +241,7 @@ export const todoHandler = (resolver: RepoContextResolver, indexerProject: strin
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (/not found/i.test(msg)) return empty(`todo(${args.action} ${args.id ?? ""})`);
-        if (/^Invalid transition|requires '/.test(msg)) return errorResponse("malformed_input", msg);
+        if (/^Invalid transition/.test(msg)) return errorResponse("malformed_input", msg);
         return errorResponse("internal_error", msg);
       }
     },

@@ -17,7 +17,7 @@ const recordReconciliationShape = {
     .describe("Specific governed refs that drifted, with a short note each"),
   note: z.string().optional().describe("One-line human summary of the drift"),
 } as const;
-const recordReconciliationSchema = z.object(recordReconciliationShape);
+export const recordReconciliationSchema = z.object(recordReconciliationShape);
 
 const MAX_INLINE_BYTES = 16 * 1024; // per-file cap on inlined source
 
@@ -37,7 +37,7 @@ const pendingReconciliationsShape = {
   repo_path: RepoPathField,
   limit: z.number().int().positive().optional().describe("Max decisions to return (default 25)"),
 } as const;
-const pendingReconciliationsSchema = z.object(pendingReconciliationsShape);
+export const pendingReconciliationsSchema = z.object(pendingReconciliationsShape);
 
 /**
  * Extracted record_reconciliation handler logic. Holds the EXACT body the

@@ -19,6 +19,24 @@ export interface DecisionServiceDeps {
   project_id?: string;
 }
 
+
+/**
+ * The stored `description` for a propose/supersede: the caller's own
+ * `description` wins, and `resolution` is only the fallback for
+ * narrative-style callers (the seed-decisions skill, the CLI) that send none.
+ * Whitespace-only text counts as absent, so a blank `description` never
+ * shadows a real `resolution`. `null` means neither carries text — the MCP
+ * `propose` schema refuses that case using this same function (T-0a40).
+ */
+export function pickDescription(
+  description: string | null | undefined,
+  resolution: string | null | undefined,
+): string | null {
+  if (typeof description === "string" && description.trim() !== "") return description;
+  if (typeof resolution === "string" && resolution.trim() !== "") return resolution;
+  return null;
+}
+
 export class DecisionService {
   private db: Database.Database;
   private decisions: DecisionsRepository;
@@ -278,7 +296,7 @@ export class DecisionService {
     const oldCanonicalId = oldExisting.id;
     const replacement = this.create({
       title: input.title,
-      description: input.resolution ?? "",
+      description: pickDescription(input.description, input.resolution) ?? "",
       rationale: input.rationale,
       alternatives: input.alternatives,
       governs: input.governs,
@@ -325,7 +343,7 @@ export class DecisionService {
       id,
       seq,
       title: input.title,
-      description: input.resolution ?? null,
+      description: pickDescription(input.description, input.resolution),
       rationale: input.rationale,
       problem: input.problem ?? null,
       resolution: input.resolution ?? null,

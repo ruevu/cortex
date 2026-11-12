@@ -16,7 +16,7 @@ const promoteDecisionShape = {
   id: z.string().describe("Decision node ID"),
   tier: z.enum(["team", "public"]).describe("Target visibility tier"),
 } as const;
-const promoteDecisionSchema = z.object(promoteDecisionShape);
+export const promoteDecisionSchema = z.object(promoteDecisionShape);
 
 /**
  * Extracted promote_decision handler logic. Holds the EXACT body the

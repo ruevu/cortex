@@ -14,9 +14,25 @@ import {
   whyWasThisBuiltAction,
   linkDecisionAction,
   decisionCandidatesAction,
+  createDecisionSchema,
+  proposeDecisionSchema,
+  supersedeDecisionSchema,
+  updateDecisionSchema,
+  deleteDecisionSchema,
+  getDecisionSchema,
+  searchDecisionsSchema,
+  whyWasThisBuiltSchema,
+  linkDecisionSchema,
+  decisionCandidatesSchema,
 } from "./decision-tools.js";
-import { promoteDecisionAction } from "./promotion-tools.js";
-import { recordReconciliationAction, pendingReconciliationsAction } from "./reconciliation-tools.js";
+import { promoteDecisionAction, promoteDecisionSchema } from "./promotion-tools.js";
+import {
+  recordReconciliationAction,
+  pendingReconciliationsAction,
+  recordReconciliationSchema,
+  pendingReconciliationsSchema,
+} from "./reconciliation-tools.js";
+import { checkActionArgs } from "./action-args.js";
 import { RepoPathField, AlternativeSchema, ProvenanceSchema } from "./shared-fields.js";
 
 // ---------------------------------------------------------------------------
@@ -42,10 +58,11 @@ import { RepoPathField, AlternativeSchema, ProvenanceSchema } from "./shared-fie
 // ---------------------------------------------------------------------------
 
 // Superset shape — every field any of the 13 actions needs, all optional
-// except `action`. Per-action required-field enforcement still happens inside
-// each extracted *Action function (which receives the same validated args the
-// legacy handler did), so making everything optional here only relaxes the
-// SDK-level surface — it does not change handler behavior.
+// except `action`. This is the shape the MCP SDK advertises and parses, so on
+// its own it enforces types but NO action's required fields. Those are
+// enforced by the per-action check in decisionHandler (ACTION_SCHEMAS below),
+// which runs before any branch. (Until T-0a40 nothing enforced them: the
+// extracted *Action functions never parse their args.)
 const decisionShape = {
   repo_path: RepoPathField,
   action: z.enum([
@@ -112,12 +129,37 @@ const decisionShape = {
 
 const decisionSchema = z.object(decisionShape);
 
+type DecisionAction = z.infer<typeof decisionSchema>["action"];
+
+/**
+ * Each action's own schema — the source of its required fields. Typed as a
+ * full Record so adding an action to the enum without a schema here is a
+ * compile error, not a silently unvalidated action.
+ */
+const ACTION_SCHEMAS: Record<DecisionAction, z.ZodTypeAny> = {
+  create: createDecisionSchema,
+  update: updateDecisionSchema,
+  delete: deleteDecisionSchema,
+  get: getDecisionSchema,
+  search: searchDecisionsSchema,
+  why: whyWasThisBuiltSchema,
+  candidates: decisionCandidatesSchema,
+  link: linkDecisionSchema,
+  promote: promoteDecisionSchema,
+  propose: proposeDecisionSchema,
+  supersede: supersedeDecisionSchema,
+  reconcile: recordReconciliationSchema,
+  pending: pendingReconciliationsSchema,
+};
+
 /**
  * The dispatching handler for the consolidated `decision` tool. Registers with
  * `{ resolver }` only — NO blanket `freshnessAware` (see the freshness-parity
- * note above). Each branch hands the validated args (cast to the corresponding
- * action's arg type — the superset shape is a structural superset of every
- * per-action shape) to the matching extracted function.
+ * note above). The args are first checked against the action's own schema
+ * (ACTION_SCHEMAS) — a call missing a required field is refused as
+ * `malformed_input` naming it. Each branch then hands the ORIGINAL args (cast
+ * to the action's arg type; see checkActionArgs for why not the parsed ones)
+ * to the matching extracted function.
  */
 export const decisionHandler = (
   resolver: RepoContextResolver,
@@ -129,6 +171,11 @@ export const decisionHandler = (
     decisionSchema,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (ctx: RepoContext, args) => {
+      // No `if (schema)` guard: ACTION_SCHEMAS is an exhaustive Record over the
+      // action enum, so a missing entry is a compile error, never a silently
+      // unvalidated action.
+      const bad = checkActionArgs("decision", args.action, ACTION_SCHEMAS[args.action], args);
+      if (bad) return bad;
       switch (args.action) {
         case "create":
           return createDecisionAction(ctx, args as any, bus, indexerProject);

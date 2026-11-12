@@ -3,6 +3,7 @@ import { z } from "zod";
 import { registerTool, type RepoContext, type RepoContextResolver } from "../repo-context.js";
 import { ok, empty, error as errorResponse } from "../response.js";
 import { RepoPathField } from "./shared-fields.js";
+import { checkActionArgs } from "./action-args.js";
 import { postToViewer, discoverViewerPort } from "./viewer-post.js";
 import { StoryService } from "../../stories/service.js";
 import { captureOrigin } from "../../git/origin.js";
@@ -65,17 +66,31 @@ const showShape = {
 const showSchema = z.object(showShape);
 type ShowArgs = z.infer<typeof showSchema>;
 
-function need<T>(v: T | undefined, action: string, field: string): T {
-  if (v === undefined) throw new Error(`show(${action}) requires '${field}'`);
-  return v;
-}
+/**
+ * Each action's own schema: the superset with that action's required fields
+ * made required. Checked up front by checkActionArgs, the same check (and
+ * message shape) as the decision, pr and todo tools (T-0a40, D-vwwa). An
+ * exhaustive Record over the action enum, so a new action without an entry
+ * is a compile error. The switch below can therefore treat these fields as
+ * present.
+ */
+const SHOW_ACTION_SCHEMAS: Record<ShowArgs["action"], z.ZodTypeAny> = {
+  focus: showSchema,
+  story: showSchema.required({ title: true, steps: true }),
+  advance: showSchema.required({ story_id: true, step: true }),
+  get: showSchema.required({ story_id: true }),
+  list: showSchema,
+  close: showSchema.required({ story_id: true }),
+  delete: showSchema.required({ story_id: true }),
+};
 
 /**
  * The `show` tool's dispatching switch, wrapped in a single try/catch
  * mirroring the `todo` dispatcher's idiom (todo-tools.ts): a StoryService
- * "not found" throw becomes an empty envelope, a validation throw (`need()`,
- * or StoryService's "is closed" / "out of range" / "at least one step")
- * becomes `malformed_input`, anything else is `internal_error`.
+ * "not found" throw becomes an empty envelope, a StoryService validation throw
+ * ("is closed" / "out of range" / "at least one step") becomes
+ * `malformed_input`, anything else is `internal_error`. A missing required
+ * field never reaches the switch: SHOW_ACTION_SCHEMAS refuses it first.
  *
  * Exported separately from {@link showHandler} (which wraps this with
  * `registerTool`'s repo_path pre-check + Zod validation) so the T-7e5b
@@ -84,6 +99,15 @@ function need<T>(v: T | undefined, action: string, field: string): T {
  * directly in tests by casting an invalid action past TypeScript.
  */
 export async function showAction(ctx: RepoContext, args: ShowArgs) {
+  // Unlike the decision/pr/todo dispatchers this lookup CAN miss: showAction
+  // is exported so the T-7e5b test can drive the default arm with an action
+  // outside the enum. Such an action has no schema and falls through to the
+  // default arm's own refusal.
+  const schema = SHOW_ACTION_SCHEMAS[args.action] as z.ZodTypeAny | undefined;
+  if (schema) {
+    const missing = checkActionArgs("show", args.action, schema, args);
+    if (missing) return missing;
+  }
   try {
     switch (args.action) {
       case "focus": {
@@ -108,9 +132,9 @@ export async function showAction(ctx: RepoContext, args: ShowArgs) {
       case "story": {
         const svc = new StoryService({ db: ctx.decisionsDb });
         const created = svc.create({
-          title: need(args.title, "story", "title"),
+          title: args.title!,
           description: args.description,
-          steps: need(args.steps, "story", "steps"),
+          steps: args.steps!,
           links: args.links,
           closed: args.closed,
           // captureOrigin is called HERE, in the handler, on ctx.repoPath
@@ -130,8 +154,8 @@ export async function showAction(ctx: RepoContext, args: ShowArgs) {
       }
       case "advance": {
         const svc = new StoryService({ db: ctx.decisionsDb });
-        const storyId = need(args.story_id, "advance", "story_id");
-        const step = need(args.step, "advance", "step");
+        const storyId = args.story_id!;
+        const step = args.step!;
         const resolved = svc.checkAdvance(storyId, step);
         const { delivered, accepted } = await postToViewer("/api/show-advance", {
           repo_path: ctx.repoPath,
@@ -148,7 +172,7 @@ export async function showAction(ctx: RepoContext, args: ShowArgs) {
       }
       case "get": {
         const svc = new StoryService({ db: ctx.decisionsDb });
-        const storyId = need(args.story_id, "get", "story_id");
+        const storyId = args.story_id!;
         const story = svc.get(storyId);
         return story ? ok(JSON.stringify(story, null, 2)) : empty(`show(get ${storyId})`);
       }
@@ -159,7 +183,7 @@ export async function showAction(ctx: RepoContext, args: ShowArgs) {
       }
       case "close": {
         const svc = new StoryService({ db: ctx.decisionsDb });
-        const storyId = need(args.story_id, "close", "story_id");
+        const storyId = args.story_id!;
         // captureOrigin is called HERE, in the handler, on ctx.repoPath (the
         // checkout root) — never in the service. Closing a story rewrites
         // last_touched_* only; origin is immutable.
@@ -167,7 +191,7 @@ export async function showAction(ctx: RepoContext, args: ShowArgs) {
       }
       case "delete": {
         const svc = new StoryService({ db: ctx.decisionsDb });
-        const storyId = need(args.story_id, "delete", "story_id");
+        const storyId = args.story_id!;
         const deleted = svc.delete(storyId);
         return deleted ? ok(`Deleted ${storyId}`) : empty(`show(delete ${storyId})`);
       }
@@ -180,7 +204,7 @@ export async function showAction(ctx: RepoContext, args: ShowArgs) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/not found/i.test(msg)) return empty(`show(${args.action} ${args.story_id ?? ""})`);
-    if (/requires '|closed|out of range|at least one step/.test(msg)) return errorResponse("malformed_input", msg);
+    if (/closed|out of range|at least one step/.test(msg)) return errorResponse("malformed_input", msg);
     return errorResponse("internal_error", msg);
   }
 }
