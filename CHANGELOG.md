@@ -38,12 +38,14 @@ All notable changes to Cortex are documented here. The format follows
   to have two IDs, only one of which had calls. The shared resolver now reads
   it exactly, for any source extension, so `trace_path`, `context_pack`,
   `get_code_snippet` and `cortex code show|where|calls` all accept it. A
-  shortened path (`use-app.ts::useApp`) lists one candidate per matching file.
+  shortened path (`use-app.ts::useApp`) lists one candidate per matching file
+  — its least-nested definition, or every one nested equally deep.
 - **An ambiguous name lists its candidates — up to 25, with the true count.**
   The list stopped at five with no sign that more existed, which in a monorepo
   often left out the definition wanted. It now shows up to 25, says
-  `showing 25 of N` past that, and prints each candidate in the `path::Name`
-  form the tools accept back.
+  `showing 25 of N` past that, and prints each candidate the way
+  `search_graph` does (`path::Name` for JS/TS), a form the tools now accept
+  back.
 - **The resolver closes the database handle it opens.** Every resolution left
   a SQLite connection open for the life of the MCP server.
 
@@ -53,7 +55,13 @@ All notable changes to Cortex are documented here. The format follows
   `name = ? OR name LIKE '%name%'` in one query, so `useInject` was ambiguous
   with `useInjectAll`, and `route` with the `router` module. Exact matches now
   come first; substring matching applies only when nothing has that exact
-  name. Decision, PR and todo nodes are no longer candidates.
+  name, and only to a bare identifier. Decision, PR and todo nodes are no
+  longer candidates.
+- **Path and qualified-name suffixes match from a boundary, exactly.** They
+  were `LIKE '%…'` matches, so `Card.vue` matched `apps/IdCard.vue` and
+  `a.render` matched `…data.render` — a silent wrong answer whenever that was
+  the only match. A trailing part of a path must now start after a `/`, and of
+  a qualified name after a `.`, compared case-sensitively.
 - **`.cortexignore` is documented.** The indexer has always skipped paths
   matched by a `.cortexignore` at the repo root (gitignore syntax, on top of
   `.gitignore`), but nothing said so. The README and the `index_repository`

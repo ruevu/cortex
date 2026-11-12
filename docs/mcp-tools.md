@@ -173,14 +173,22 @@ show|where|calls`) take one symbol and resolve it through one shared resolver
 
 1. **`path::Name`** — the form these tools print for a JS/TS symbol
    (`src/server.ts::handleRequest`, `src/widget.ts::Widget.render`), accepted
-   for any source extension. Matched exactly, `_` and case included. A
-   shortened path (`server.ts::handleRequest`) is fine; it is ambiguous only
-   when several files end that way, and then lists one candidate per file.
+   for any source extension and split at the first `::`. A shortened path
+   (`server.ts::handleRequest`) is fine. Per matching file it takes the
+   least-nested definition (`render` over `Widget.render`); two equally nested
+   ones (`Foo.render`, `Bar.render`) are both listed rather than one picked.
+   An input that matches no file this way falls through to the forms below, so
+   a C++ name or qn that itself contains `::` still resolves.
 2. `path:Name` (editor-jump style).
-3. A file path.
-4. A full qualified name, or a dotted suffix of one (`widget.Widget.render`).
+3. A file path — the whole path, or a trailing part of it that starts after a
+   `/`: `Card.vue` is `apps/Card.vue`, never `apps/IdCard.vue`.
+4. A full qualified name, or a trailing part of one that starts after a `.`
+   (`widget.Widget.render`, never `…dget.Widget.render`).
 5. A bare name — exact matches first; names that merely contain it only when
-   nothing has that exact name.
+   nothing has that exact name, and only for an input with no `/` or `.`.
+
+Forms 1–4 compare exactly, case and `_` included. Only the substring step in
+form 5 is fuzzy (a case-insensitive `LIKE`).
 
 When the input matches more than one symbol, the tool returns
 `ambiguous_input` listing up to 25 candidates in `path::Name` form, and
