@@ -18,11 +18,12 @@ describe("context_pack", () => {
   });
 
   it("returns ambiguous_input with a candidate list for a multi-match bare name", async () => {
-    // `route` resolves to multiple symbols in the fixture: the bare-name LIKE
-    // ('%route%') matches the `router` module/file/class nodes plus the
-    // `Router.route` method — so resolveInput returns `multi` and we exercise
+    // Nothing in the fixture is named exactly `rout`, so the resolver falls
+    // back to a substring match, which hits the `router` module/file nodes,
+    // the `Router` class and the `Router.route` method — `multi`, exercising
     // the candidate-list ("Multiple matches") formatting path unconditionally.
-    const res = await callTool(h, "context_pack", { qualified_name: "route" });
+    // (`route` itself now resolves: an exact name beats substring matches.)
+    const res = await callTool(h, "context_pack", { qualified_name: "rout" });
     expect(res.isError).toBeTruthy();
     const text = res.content[0].text;
     expect(text).toContain("Multiple matches");

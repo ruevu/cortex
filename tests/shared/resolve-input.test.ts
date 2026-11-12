@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GraphStore } from "../../src/graph/store.js";
-import { resolveInput } from "../../src/shared/resolve-input.js";
+import { resolveInput, MAX_CANDIDATES } from "../../src/shared/resolve-input.js";
 
 describe("shared resolveInput", () => {
   let dir: string;
@@ -62,5 +62,130 @@ describe("shared resolveInput", () => {
   it("no matches → kind: 'none'", () => {
     const r = resolveInput("apps/missing.vue", project, dbPath);
     expect(r.kind).toBe("none");
+  });
+
+  it("a single result carries the node's id — what callers must trace from", () => {
+    const node = store.createNode({
+      kind: "function", name: "handleRequest",
+      file_path: "src/handler.ts",
+      qualified_name: "test-project.src.handler.handleRequest",
+    });
+    const r = resolveInput("handleRequest", project, dbPath);
+    expect(r.kind === "single" && r.symbol.id).toBe(node.id);
+  });
+
+  describe("the path::Symbol display form every tool prints", () => {
+    const fn = (file: string, qnTail: string, kind = "function") =>
+      store.createNode({
+        kind,
+        name: qnTail.split(".").pop()!,
+        file_path: file,
+        qualified_name: `test-project.${qnTail}`,
+      });
+
+    it("resolves back to the node it was printed for", () => {
+      const node = fn("packages/service/src/use-inject.ts", "packages.service.src.use-inject.useInject");
+      const r = resolveInput("packages/service/src/use-inject.ts::useInject", project, dbPath);
+      expect(r.kind).toBe("single");
+      if (r.kind === "single") expect(r.symbol.id).toBe(node.id);
+    });
+
+    it("resolves a nested Class.method", () => {
+      fn("src/widget.ts", "src.widget.render");
+      const method = fn("src/widget.ts", "src.widget.Widget.render", "method");
+      const r = resolveInput("src/widget.ts::Widget.render", project, dbPath);
+      expect(r.kind === "single" && r.symbol.id).toBe(method.id);
+    });
+
+    it("prefers the top-level definition over a nested one with the same tail", () => {
+      const top = fn("src/widget.ts", "src.widget.render");
+      fn("src/widget.ts", "src.widget.Widget.render", "method");
+      // A project name the caller derived differently forces the fallback path.
+      const r = resolveInput("src/widget.ts::render", "some-other-name", dbPath);
+      expect(r.kind === "single" && r.symbol.id).toBe(top.id);
+    });
+
+    it("picks the component, not the module, in a file named after it", () => {
+      // The module qn `…src.Button` also ends in `.Button`.
+      fn("src/Button.tsx", "src.Button", "module");
+      const component = fn("src/Button.tsx", "src.Button.Button");
+      expect(resolveInput("src/Button.tsx::Button", project, dbPath)).toMatchObject({
+        kind: "single", symbol: { id: component.id },
+      });
+      expect(resolveInput("src/Button.tsx::Button", "some-other-name", dbPath)).toMatchObject({
+        kind: "single", symbol: { id: component.id },
+      });
+    });
+
+    it("works for a non-JS extension", () => {
+      const model = fn("app/models.py", "app.models.Model", "class");
+      const r = resolveInput("app/models.py::Model", project, dbPath);
+      expect(r.kind === "single" && r.symbol.id).toBe(model.id);
+    });
+
+    it("an abbreviated path matching several files is ambiguous, one candidate per file", () => {
+      fn("apps/academy/src/use-app.ts", "apps.academy.src.use-app.useApp");
+      fn("apps/studio/src/use-app.ts", "apps.studio.src.use-app.useApp");
+      const r = resolveInput("use-app.ts::useApp", project, dbPath);
+      expect(r.kind).toBe("multi");
+      if (r.kind === "multi") {
+        expect(r.total).toBe(2);
+        expect(r.candidates.map((c) => c.file_path).sort()).toEqual([
+          "apps/academy/src/use-app.ts",
+          "apps/studio/src/use-app.ts",
+        ]);
+      }
+    });
+
+    it("matches names exactly — `_` is not a wildcard, case is not folded", () => {
+      fn("src/x.ts", "src.x.aXb");
+      fn("src/x.ts", "src.x.Lower");
+      expect(resolveInput("src/x.ts::a_b", "some-other-name", dbPath).kind).toBe("none");
+      expect(resolveInput("src/x.ts::lower", "some-other-name", dbPath).kind).toBe("none");
+    });
+
+    it("a miss is final — it does not fall through to a bare-name match", () => {
+      fn("src/a.ts", "src.a.useApp");
+      expect(resolveInput("src/elsewhere.ts::useApp", project, dbPath).kind).toBe("none");
+    });
+  });
+
+  describe("bare names", () => {
+    it("an exact name wins over names that merely contain it", () => {
+      const exact = store.createNode({ kind: "function", name: "useInject", file_path: "a.ts", qualified_name: "test-project.a.useInject" });
+      store.createNode({ kind: "function", name: "useInjectAll", file_path: "b.ts", qualified_name: "test-project.b.useInjectAll" });
+      const r = resolveInput("useInject", project, dbPath);
+      expect(r.kind === "single" && r.symbol.id).toBe(exact.id);
+    });
+
+    it("falls back to a substring match when nothing is named exactly", () => {
+      const only = store.createNode({ kind: "function", name: "useInjectAll", file_path: "b.ts", qualified_name: "test-project.b.useInjectAll" });
+      const r = resolveInput("InjectAll", project, dbPath);
+      expect(r.kind === "single" && r.symbol.id).toBe(only.id);
+    });
+
+    it("lists every same-named definition, not just the first five", () => {
+      for (let i = 0; i < 11; i++) {
+        store.createNode({ kind: "function", name: "useApp", file_path: `apps/a${i}/use-app.ts`, qualified_name: `test-project.apps.a${i}.use-app.useApp` });
+      }
+      const r = resolveInput("useApp", project, dbPath);
+      expect(r.kind).toBe("multi");
+      if (r.kind === "multi") {
+        expect(r.candidates).toHaveLength(11);
+        expect(r.total).toBe(11);
+      }
+    });
+
+    it("caps the candidate list but reports the true total", () => {
+      for (let i = 0; i < MAX_CANDIDATES + 5; i++) {
+        store.createNode({ kind: "function", name: "render", file_path: `c${i}.ts`, qualified_name: `test-project.c${i}.render` });
+      }
+      const r = resolveInput("render", project, dbPath);
+      expect(r.kind).toBe("multi");
+      if (r.kind === "multi") {
+        expect(r.candidates).toHaveLength(MAX_CANDIDATES);
+        expect(r.total).toBe(MAX_CANDIDATES + 5);
+      }
+    });
   });
 });

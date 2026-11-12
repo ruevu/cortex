@@ -15,6 +15,7 @@ import { DecisionSearch } from "../../decisions/search.js";
 import { ok, empty, error as errorResponse } from "../response.js";
 import { validateDecisionFields } from "./decision-input-validation.js";
 import { resolveInput } from "../../shared/resolve-input.js";
+import { ambiguousInputMessage } from "./code-tools-shared.js";
 import { frameCandidates } from "../../decisions/seed/frame-candidates.js";
 import { type RepoContext, type RepoContextResolver, deriveProjectName } from "../repo-context.js";
 import { freshnessForContext, attachFreshness } from "../freshness.js";
@@ -560,15 +561,9 @@ export async function whyWasThisBuiltAction(
       // cache slot), not a re-derived .cortex/db that may be empty.
       const resolved = resolveInput(qualified_name, project, ctx.graphDbPath);
       if (resolved.kind === "multi") {
-        const candidatesList = resolved.candidates
-          .map((c, i) => `  ${i + 1}. ${c.qn}  (${c.kind}, ${c.file_path})`)
-          .join("\n");
         return attachWhyFreshness(
           ctx,
-          errorResponse(
-            "ambiguous_input",
-            `Multiple matches for '${qualified_name}'. Pick one and re-call:\n${candidatesList}`,
-          ),
+          errorResponse("ambiguous_input", ambiguousInputMessage(qualified_name, resolved)),
         );
       }
       if (resolved.kind === "single") {

@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { GraphStore } from "../../src/graph/store.js";
-import { searchGraph, countSuppressedSections, tracePath, getGraphSchema, listProjects, listProjectsUnified, indexStatus } from "../../src/graph/code-queries.js";
+import { searchGraph, countSuppressedSections, tracePath, getNodeById, getGraphSchema, listProjects, listProjectsUnified, indexStatus } from "../../src/graph/code-queries.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const REPO_ROOT = join(__dirname, "..", "..");
@@ -83,9 +83,19 @@ describe("code-queries against unified cortex.db", () => {
   });
 
   it("tracePath returns reachable nodes for a known function", () => {
-    const trace = tracePath(store, project, { function_name: "handleRequest", mode: "calls" });
+    const [start] = searchGraph(store, project, { name_pattern: "handleRequest", kinds: ["function"] });
+    const trace = tracePath(store, project, { node_id: start.id, mode: "calls" });
     expect(trace.length).toBeGreaterThan(0);
     expect(trace[0]).toHaveProperty("depth");
+    // parseBody is what handleRequest calls in the fixture.
+    expect(trace.map((t) => t.node.name)).toContain("parseBody");
+  });
+
+  it("getNodeById returns the node in this project, and null for an unknown id", () => {
+    const [start] = searchGraph(store, project, { name_pattern: "handleRequest", kinds: ["function"] });
+    expect(getNodeById(store, project, start.id)?.qualified_name).toBe(start.qualified_name);
+    expect(getNodeById(store, project, "no-such-id")).toBeNull();
+    expect(getNodeById(store, "some-other-project", start.id)).toBeNull();
   });
 
   it("listProjects returns the indexed project", () => {

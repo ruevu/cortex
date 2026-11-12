@@ -34,7 +34,9 @@ function requireIndexed(
 }
 
 function renderDisambiguation(d: Disambiguation): never {
-  const lines = [`Multiple matches for '${d.input}'. Pick one:`, ""];
+  const shown = d.candidates.length;
+  const count = d.total > shown ? ` (showing ${shown} of ${d.total})` : "";
+  const lines = [`Multiple matches for '${d.input}'${count}. Pick one:`, ""];
   d.candidates.forEach((c, i) => {
     lines.push(`  ${i + 1}. ${c.qn}  (${c.kind}, ${c.file_path})`);
   });
@@ -222,9 +224,15 @@ function cmdTrace(cmd: CodeCommand, ctx: ProjectContext, mode: "calls" | "caller
   }
   const resolved = resolveInput(input, ctx.projectName, ctx.graphDbPath);
   if ("candidates" in resolved) renderDisambiguation(resolved);
+  // Trace the node the resolver chose, by id — not its bare name, which would
+  // pick an arbitrary same-named definition elsewhere in the repo.
   const store = new GraphStore(ctx.graphDbPath);
-  const fnName = resolved.qn.split(".").pop()!;
-  const results = tracePath(store, ctx.projectName, { function_name: fnName, mode });
+  let results: ReturnType<typeof tracePath>;
+  try {
+    results = tracePath(store, ctx.projectName, { node_id: resolved.id, mode });
+  } finally {
+    store.close();
+  }
   const rows = results.map((r) => ({
     depth: r.depth,
     name: r.node.name,
@@ -233,7 +241,7 @@ function cmdTrace(cmd: CodeCommand, ctx: ProjectContext, mode: "calls" | "caller
   }));
   const fmt = chooseFormat(cmd.flags.format as string | undefined, process.stdout.isTTY);
   const verb = mode === "callers" ? "callers" : "callees";
-  writeRows(rows, fmt, `no ${verb} found for '${fnName}'`);
+  writeRows(rows, fmt, `no ${verb} found for '${input}'`);
 }
 
 function cmdArch(cmd: CodeCommand, ctx: ProjectContext): void {

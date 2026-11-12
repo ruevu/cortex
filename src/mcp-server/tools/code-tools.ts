@@ -8,6 +8,7 @@ import {
   searchGraph,
   countSuppressedSections,
   tracePath,
+  getNodeById,
   getGraphSchema,
 } from "../../graph/code-queries.js";
 import { groupCheckouts } from "../../graph/group-checkouts.js";
@@ -15,7 +16,7 @@ import { clampLimit, clampOffset, renderNodeSearch, symbolMissHint } from "./sea
 // 5A: response helpers and qualified-name normalizer
 import { ok, empty, error as errorResponse } from "../response.js";
 import { normalize, denormalize } from "../qualified-name.js";
-import { projectFromCtx, readSnippet } from "./code-tools-shared.js";
+import { projectFromCtx, readSnippet, ambiguousInputMessage } from "./code-tools-shared.js";
 import { registerContextPackTool } from "./context-pack.js";
 import { resolveInput } from "../../shared/resolve-input.js";
 import { resolveCortexDbPath, resolveDecisionsDbPath, legacyDecisionsDbPath, resolveGraphDbForRead } from "../../db/resolve-path.js";
@@ -745,7 +746,7 @@ export function registerCodeTools(
   // 5H: trace_path with {node, depth}[] shape and max_depth param — migrated.
   server.tool(
     "trace_path",
-    "Trace call chains from a function. function_name accepts a bare name, qualified name, file path, or dotted suffix. mode: calls (outbound) or callers (inbound). Returns ambiguous_input with candidates if multiple symbols match.",
+    "Trace call chains from a function. function_name accepts the path::Name form other tools print, a bare name, qualified name, file path, or dotted suffix. mode: calls (outbound) or callers (inbound). Returns ambiguous_input with candidates if multiple symbols match.",
     tracePathShape,
     registerTool(
       "trace_path",
@@ -756,29 +757,25 @@ export function registerCodeTools(
           return errorResponse("project_not_found", "Repository not indexed. Run index_repository first.");
         }
         const { repo_path: _repoPath, ...params } = args;
-        // Resolve function_name through the shared resolver so file paths,
-        // qns, and dotted suffixes work — not just exact bare names. The
-        // resolver opens its own GraphStore handle, so point it at the
-        // addressed repo's graph DB rather than the server-bound one.
-        const graphDbPath = ctx.graphDbPath;
-        let fnName = params.function_name;
-        const resolved = resolveInput(params.function_name, project, graphDbPath);
+        // Resolve function_name through the shared resolver so the display
+        // form, file paths, qns, and dotted suffixes work — not just exact
+        // bare names. The resolver opens its own GraphStore handle, so point
+        // it at the addressed repo's graph DB rather than the server-bound one.
+        const resolved = resolveInput(params.function_name, project, ctx.graphDbPath);
         if (resolved.kind === "none") {
           // Name never resolved to a node — a symbol miss, so route sideways.
           return empty(`trace_path(${JSON.stringify(params)})`, symbolMissHint());
         }
         if (resolved.kind === "multi") {
-          const candidatesList = resolved.candidates
-            .map((c, i) => `  ${i + 1}. ${c.qn}  (${c.kind}, ${c.file_path})`)
-            .join("\n");
-          return errorResponse(
-            "ambiguous_input",
-            `Multiple matches for '${params.function_name}'. Pick one and re-call:\n${candidatesList}`,
-          );
+          return errorResponse("ambiguous_input", ambiguousInputMessage(params.function_name, resolved));
         }
-        // tracePath wants the bare name; pull it from the resolved qn
-        fnName = resolved.symbol.qn.split(".").pop() ?? params.function_name;
-        const results = tracePath(ctx.store, project, { ...params, function_name: fnName });
+        // Trace from the node the resolver chose, by id — never by re-looking
+        // up its bare name, which picks an arbitrary same-named definition.
+        const results = tracePath(ctx.store, project, {
+          node_id: resolved.symbol.id,
+          mode: params.mode,
+          max_depth: params.max_depth,
+        });
         // No hint here: the symbol resolved, so this is the graph reporting
         // "no edges", not failing to carry the shape (see symbolMissHint).
         if (results.length === 0) return empty(`trace_path(${JSON.stringify(params)})`);
@@ -794,7 +791,7 @@ export function registerCodeTools(
   // 5F: get_code_snippet with normalize/denormalize — migrated to per-call routing.
   server.tool(
     "get_code_snippet",
-    "Get source code for a symbol. Input can be a qualified name, file path, dotted suffix, or bare symbol name. Returns ambiguous_input with candidates if multiple symbols match.",
+    "Get source code for a symbol. Input can be the path::Name form other tools print, a qualified name, file path, dotted suffix, or bare symbol name. Returns ambiguous_input with candidates if multiple symbols match.",
     getCodeSnippetShape,
     registerTool(
       "get_code_snippet",
@@ -805,35 +802,18 @@ export function registerCodeTools(
         if (!project) {
           return errorResponse("project_not_found", "Repository not indexed. Run index_repository first.");
         }
-        // resolveInput opens its own GraphStore handle on the supplied dbPath
-        // — point it at the addressed repo's graph DB, not the server-bound one.
-        const graphDbPath = ctx.graphDbPath;
-        if (!qualified_name.includes("::")) {
-          const resolved = resolveInput(qualified_name, project, graphDbPath);
-          if (resolved.kind === "none") {
-            return empty(`get_code_snippet(${qualified_name})`, symbolMissHint());
-          }
-          if (resolved.kind === "multi") {
-            const candidatesList = resolved.candidates
-              .map((c, i) => `  ${i + 1}. ${c.qn}  (${c.kind}, ${c.file_path})`)
-              .join("\n");
-            return errorResponse(
-              "ambiguous_input",
-              `Multiple matches for '${qualified_name}'. Pick one and re-call:\n${candidatesList}`,
-            );
-          }
-          const nodes = searchGraph(ctx.store, project, { qn_pattern: resolved.symbol.qn });
-          if (nodes.length === 0) {
-            return empty(`get_code_snippet(${qualified_name})`, symbolMissHint());
-          }
-          const node = nodes[0];
-          return readSnippet(ctx, project, node);
+        // One resolver for every input shape, the display form included —
+        // resolveInput opens its own GraphStore handle on the supplied dbPath,
+        // so point it at the addressed repo's graph DB, not the server-bound one.
+        const resolved = resolveInput(qualified_name, project, ctx.graphDbPath);
+        if (resolved.kind === "none") {
+          return empty(`get_code_snippet(${qualified_name})`, symbolMissHint());
         }
-        // qn-shaped input (contains '::') — skip the resolver and pattern-match directly.
-        const qn = normalize(qualified_name, project);
-        const nodes = searchGraph(ctx.store, project, { qn_pattern: qn });
-        if (nodes.length === 0) return empty(`get_code_snippet(${qualified_name})`, symbolMissHint());
-        const node = nodes[0];
+        if (resolved.kind === "multi") {
+          return errorResponse("ambiguous_input", ambiguousInputMessage(qualified_name, resolved));
+        }
+        const node = getNodeById(ctx.store, project, resolved.symbol.id);
+        if (!node) return empty(`get_code_snippet(${qualified_name})`, symbolMissHint());
         return readSnippet(ctx, project, node);
       },
       { resolver, freshnessAware: true, briefAware: true },
