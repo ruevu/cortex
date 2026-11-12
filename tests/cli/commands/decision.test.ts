@@ -43,6 +43,41 @@ describe("cortex decision commands", () => {
     }, ctx)).rejects.toThrow("missing --title");
   });
 
+  // T-0a40 parity with the MCP propose contract: description OR resolution.
+  it("propose accepts --description without --problem/--resolution", async () => {
+    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    await runDecisionCommand({
+      command: "propose",
+      positionals: [],
+      flags: { title: "Proposed", description: "what was decided", rationale: "r" },
+    }, ctx);
+    const out = JSON.parse(writeSpy.mock.calls.map((c) => String(c[0])).join(""));
+    writeSpy.mockRestore();
+    expect(out.status).toBe("proposed");
+    expect(out.description).toBe("what was decided");
+  });
+
+  it("propose with --problem/--resolution still works", async () => {
+    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    await runDecisionCommand({
+      command: "propose",
+      positionals: [],
+      flags: { title: "Narrative", problem: "p", resolution: "the resolution", rationale: "r" },
+    }, ctx);
+    const out = JSON.parse(writeSpy.mock.calls.map((c) => String(c[0])).join(""));
+    writeSpy.mockRestore();
+    expect(out.description).toBe("the resolution");
+    expect(out.problem).toBe("p");
+  });
+
+  it("propose with neither --description nor --resolution throws UsageError", async () => {
+    await expect(runDecisionCommand({
+      command: "propose",
+      positionals: [],
+      flags: { title: "t", rationale: "r" },
+    }, ctx)).rejects.toThrow(/--description or --resolution/);
+  });
+
   it("unknown sub-command throws UsageError", async () => {
     await expect(runDecisionCommand({ command: "frobnicate", positionals: [], flags: {} }, ctx))
       .rejects.toThrow("unknown command");

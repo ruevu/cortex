@@ -10,7 +10,7 @@
  */
 import { z } from "zod";
 import { captureOrigin } from "../../git/origin.js";
-import { DecisionService } from "../../decisions/service.js";
+import { DecisionService, pickDescription } from "../../decisions/service.js";
 import { DecisionSearch } from "../../decisions/search.js";
 import { ok, empty, error as errorResponse } from "../response.js";
 import { validateDecisionFields } from "./decision-input-validation.js";
@@ -71,7 +71,11 @@ const searchDecisionsShape = {
     .describe("Fan out over every registered repo; results grouped per repo"),
   branch: z.string().min(1).optional()
     .describe("Exact match filter on origin_branch (never matches a NULL-origin row)"),
-  thread: z.string().min(1).optional()
+  // No .min(1) here on purpose: searchDecisionsAction guards an empty thread
+  // itself with an actionable message ("omit it to search unfiltered"). Now
+  // that the dispatcher checks this schema first, a .min(1) would pre-empt
+  // that guard with Zod's generic wording.
+  thread: z.string().optional()
     .describe("Exact match filter on origin_thread (never matches a NULL-origin row)"),
 } as const;
 export const searchDecisionsSchema = z.object(searchDecisionsShape);
@@ -108,8 +112,12 @@ const supersedeDecisionShape = {
   repo_path: RepoPathField,
   old_decision_id: z.string(),
   title: z.string(),
-  problem: z.string(),
-  resolution: z.string(),
+  // Same description semantics as propose (pickDescription). problem and
+  // resolution stay required keys but accept null, as the dispatcher's
+  // superset shape always has.
+  description: z.string().optional().describe("What was decided; defaults to `resolution` when absent"),
+  problem: z.string().nullable(),
+  resolution: z.string().nullable(),
   rationale: z.string(),
   alternatives: z.array(AlternativeSchema).optional(),
   governs: z.array(z.string()).optional(),
@@ -138,7 +146,7 @@ const proposeDecisionShape = {
   thread: z.string().optional().describe("Caller-supplied thread/session id for origin provenance"),
 } as const;
 export const proposeDecisionSchema = z.object(proposeDecisionShape).refine(
-  (a) => Boolean(a.description) || Boolean(a.resolution),
+  (a) => pickDescription(a.description, a.resolution) !== null,
   { message: "provide `description` or `resolution` (what was decided)", path: ["description"] },
 );
 

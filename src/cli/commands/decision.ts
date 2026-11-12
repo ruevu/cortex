@@ -5,7 +5,7 @@ import { Registry } from "../../db/registry.js";
 import { openDecisionsDb } from "../../decisions/db.js";
 import { DecisionsRepository } from "../../decisions/repository.js";
 import { DecisionLinksRepository } from "../../decisions/links-repository.js";
-import { DecisionService } from "../../decisions/service.js";
+import { DecisionService, pickDescription } from "../../decisions/service.js";
 import { DecisionSearch } from "../../decisions/search.js";
 import { frameCandidates } from "../../decisions/seed/frame-candidates.js";
 import { captureOrigin, type OriginFields } from "../../git/origin.js";
@@ -344,12 +344,24 @@ function cmdLink(cmd: DecisionCommand, ctx: ProjectContext): void {
 
 function cmdPropose(cmd: DecisionCommand, ctx: ProjectContext): void {
   const title = requireFlag("title", cmd.flags);
-  const problem = requireFlag("problem", cmd.flags);
-  const resolution = requireFlag("resolution", cmd.flags);
   const rationale = requireFlag("rationale", cmd.flags);
+  // Same contract as MCP `decision({action:"propose"})` (T-0a40): what was
+  // decided arrives as --description, or as the --problem/--resolution
+  // narrative pair; at least one of --description / --resolution must carry it.
+  const optional = (name: string): string | undefined =>
+    typeof cmd.flags[name] === "string" ? (cmd.flags[name] as string) : undefined;
+  const description = optional("description");
+  const problem = optional("problem");
+  const resolution = optional("resolution");
+  if (pickDescription(description, resolution) === null) {
+    throw new UsageError(
+      "propose needs --description or --resolution (what was decided)",
+      "Usage: cortex decision propose --title=... --rationale=... --description=...  (or --problem=... --resolution=...)",
+    );
+  }
   const { db, svc } = openService(ctx);
   try {
-    const d = svc.propose({ title, problem, resolution, rationale });
+    const d = svc.propose({ title, description, problem, resolution, rationale });
     process.stdout.write(JSON.stringify(d, null, 2) + "\n");
   } finally {
     db.close();

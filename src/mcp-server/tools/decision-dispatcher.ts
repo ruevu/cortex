@@ -171,11 +171,11 @@ export const decisionHandler = (
     decisionSchema,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (ctx: RepoContext, args) => {
-      const schema = ACTION_SCHEMAS[args.action];
-      if (schema) {
-        const bad = checkActionArgs("decision", args.action, schema, args);
-        if (bad) return bad;
-      }
+      // No `if (schema)` guard: ACTION_SCHEMAS is an exhaustive Record over the
+      // action enum, so a missing entry is a compile error, never a silently
+      // unvalidated action.
+      const bad = checkActionArgs("decision", args.action, ACTION_SCHEMAS[args.action], args);
+      if (bad) return bad;
       switch (args.action) {
         case "create":
           return createDecisionAction(ctx, args as any, bus, indexerProject);

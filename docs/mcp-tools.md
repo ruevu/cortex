@@ -442,8 +442,10 @@ Create a decision in `status: "proposed"`.
 
 ### `action: "supersede"`
 Atomically create a new decision that supersedes an existing one.
-- **Params:** `old_decision_id`, `title`, `problem`, `resolution`,
-  `rationale`, `alternatives?`, `governs?`, `references?`.
+- **Params:** `old_decision_id`, `title`, `problem`, `resolution` (both
+  nullable), `rationale`, `description?`, `alternatives?`, `governs?`,
+  `references?`. `description` behaves as on `propose`: stored as given,
+  defaulting to `resolution`.
 - **Why:** record a direction change without losing the history of what it
   replaced.
 

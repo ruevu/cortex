@@ -325,6 +325,58 @@ describe.skipIf(BINARY_MISSING)("decision dispatcher contract", () => {
       });
     }
 
+    it("propose treats a whitespace-only description as absent", async () => {
+      const res = await dispatch({
+        repo_path: repo,
+        action: "propose",
+        title: "Blank description",
+        description: "   ",
+        resolution: "the resolution",
+        rationale: "r",
+      });
+      expect(res.isError).toBeFalsy();
+      const d = JSON.parse(res.content[0].text);
+      expect(d.description).toBe("the resolution");
+      await dispatch({ repo_path: repo, action: "delete", id: d.id });
+    });
+
+    it("propose with only whitespace in description and resolution is refused", async () => {
+      const res = await dispatch({
+        repo_path: repo, action: "propose", title: "t", rationale: "r", description: " ", resolution: "\t",
+      });
+      expect(res.isError).toBe(true);
+      expect(res.content[0].text).toMatch(/^ERROR reason=malformed_input/);
+    });
+
+    it("supersede stores a caller's description, and accepts a null problem", async () => {
+      const orig = await dispatch({
+        repo_path: repo, action: "create", title: "To be superseded", description: "d", rationale: "r",
+      });
+      const oldId = JSON.parse(orig.content[0].text).id;
+      const res = await dispatch({
+        repo_path: repo,
+        action: "supersede",
+        old_decision_id: oldId,
+        title: "Replacement",
+        description: "the full description",
+        problem: null,
+        resolution: "short",
+        rationale: "r",
+      });
+      expect(res.isError).toBeFalsy();
+      const d = JSON.parse(res.content[0].text);
+      expect(d.description).toBe("the full description");
+      expect(d.problem).toBeNull();
+      await dispatch({ repo_path: repo, action: "delete", id: d.id });
+      await dispatch({ repo_path: repo, action: "delete", id: oldId });
+    });
+
+    it("search with an empty thread keeps its actionable message", async () => {
+      const res = await dispatch({ repo_path: repo, action: "search", query: "q", thread: "" });
+      expect(res.isError).toBe(true);
+      expect(res.content[0].text).toContain("omit it to search unfiltered");
+    });
+
     it("create still accepts a null problem/resolution (the superset always allowed it)", async () => {
       const res = await dispatch({
         repo_path: repo,
