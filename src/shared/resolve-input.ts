@@ -35,14 +35,22 @@ const DEFINITION_KINDS = "kind NOT IN ('project', 'folder', 'file', 'module')";
 
 type Found = { rows: ResolvedSymbol[]; total: number };
 
-function find(store: GraphStore, where: string, params: unknown[], orderBy: string): Found {
+/**
+ * Up to {@link MAX_CANDIDATES} rows of `select` — a query yielding `id, qn,
+ * file_path, kind` — and the true count, taken only when the cap was reached.
+ */
+function findIn(store: GraphStore, select: string, params: unknown[], orderBy: string): Found {
   const rows = store.queryRaw<ResolvedSymbol>(
-    `SELECT ${COLS} FROM nodes WHERE ${where} ORDER BY ${orderBy} LIMIT ${MAX_CANDIDATES}`,
+    `${select} ORDER BY ${orderBy} LIMIT ${MAX_CANDIDATES}`,
     params,
   );
   if (rows.length < MAX_CANDIDATES) return { rows, total: rows.length };
-  const [count] = store.queryRaw<{ n: number }>(`SELECT COUNT(*) AS n FROM nodes WHERE ${where}`, params);
+  const [count] = store.queryRaw<{ n: number }>(`SELECT COUNT(*) AS n FROM (${select})`, params);
   return { rows, total: count?.n ?? rows.length };
+}
+
+function find(store: GraphStore, where: string, params: unknown[], orderBy: string): Found {
+  return findIn(store, `SELECT ${COLS} FROM nodes WHERE ${where}`, params, orderBy);
 }
 
 /**
@@ -68,9 +76,10 @@ function stripLastExt(path: string): string {
  * where the module qn is the project plus the dotted path minus its
  * extension, so this is the precise inverse of the display form. The fallback
  * covers an abbreviated path (`use-app.ts::useApp`), a symbol written without
- * its enclosing class, and a project name the caller derived differently.
- * It excludes structural kinds, or `Button.tsx::Button` would hit the module
- * `…src.Button` (which also ends in `.Button`) instead of the component.
+ * its enclosing class, and a project name the caller derived differently
+ * (decision `why` derives it from the repo path). It excludes structural
+ * kinds, or `Button.tsx::Button` would hit the module `…src.Button` (which
+ * also ends in `.Button`) instead of the component.
  */
 function lookupByDisplayForm(
   store: GraphStore,
@@ -82,22 +91,21 @@ function lookupByDisplayForm(
   const exact = find(store, `qualified_name = ? AND ${SYMBOL_KINDS}`, [exactQn], "id");
   if (exact.rows.length > 0) return exact;
 
+  // Per file, keep only the least-nested matches, by the qn's dot count —
+  // every row from one file shares its module prefix, so that difference is
+  // pure nesting. One shallowest match is the definition the display form
+  // names (`render`, not `Widget.render`). Several are siblings nested equally
+  // deep (`Foo.render`, `Bar.render`) and stay ambiguous: the resolver
+  // reports, it does not guess. Done in SQL so `total` counts every file.
   const fileTail = endsWith("file_path", `/${filePart}`);
   const qnTail = endsWith("qualified_name", `.${symbol}`);
-  const rows = store.queryRaw<ResolvedSymbol>(
-    `SELECT ${COLS} FROM nodes
-     WHERE (file_path = ? OR ${fileTail.sql}) AND ${qnTail.sql} AND ${SYMBOL_KINDS} AND ${DEFINITION_KINDS}
-     ORDER BY file_path, length(qualified_name), qualified_name
-     LIMIT ${MAX_CANDIDATES * 8}`,
-    [filePart, ...fileTail.params, ...qnTail.params],
-  );
-  // One definition per file: the shortest qn is the one directly under the
-  // module, which is what the display form names. A longer qn with the same
-  // tail is nested (`Widget.render` when the input says `render`).
-  const perFile = new Map<string, ResolvedSymbol>();
-  for (const r of rows) if (!perFile.has(r.file_path)) perFile.set(r.file_path, r);
-  const all = [...perFile.values()];
-  return { rows: all.slice(0, MAX_CANDIDATES), total: all.length };
+  const depth = "length(qualified_name) - length(replace(qualified_name, '.', ''))";
+  const shallowest = `SELECT id, qn, file_path, kind FROM (
+      SELECT ${COLS}, ${depth} AS depth, MIN(${depth}) OVER (PARTITION BY file_path) AS least
+      FROM nodes
+      WHERE (file_path = ? OR ${fileTail.sql}) AND ${qnTail.sql} AND ${SYMBOL_KINDS} AND ${DEFINITION_KINDS}
+    ) WHERE depth = least`;
+  return findIn(store, shallowest, [filePart, ...fileTail.params, ...qnTail.params], "file_path, qn");
 }
 
 function splitFileSymbol(input: string): { filePath: string; symbol: string } | null {
@@ -112,31 +120,43 @@ function splitFileSymbol(input: string): { filePath: string; symbol: string } | 
 }
 
 function resolveWith(store: GraphStore, input: string, project: string): Found {
-  // 0. Display form `path::Symbol`. Explicit about its file, so a miss here is
-  //    final — no later step could match a string containing `::`.
+  // Suffix matching below is exact and starts at a boundary — a `/` in a path,
+  // a `.` in a qn — so `Card.vue` is never `IdCard.vue` and `a.render` never
+  // `data.render`. A suffix that only happened to match was a silent wrong
+  // answer whenever it was the sole match.
+
+  // 0. Display form `path::Symbol`, split at the FIRST `::`: a file path never
+  //    contains one, but a symbol can (C++ `ns::Class.method`). A miss falls
+  //    through, because a canonical qn or a plain name can contain `::` too
+  //    (`…simplecpp::TokenList::Stream.readChar`, a JSON key `Fn::Join`); no
+  //    step below matches a real display form, so that is safe.
   const sep = input.indexOf("::");
   if (sep > 0 && sep < input.length - 2) {
-    return lookupByDisplayForm(store, project, input.slice(0, sep), input.slice(sep + 2));
+    const found = lookupByDisplayForm(store, project, input.slice(0, sep), input.slice(sep + 2));
+    if (found.rows.length > 0) return found;
   }
 
   // 0b. file:symbol form (editor-jump style, e.g. apps/foo/bar.ts:Baz)
   const split = splitFileSymbol(input);
   if (split) {
+    const tail = endsWith("file_path", `/${split.filePath}`);
     const found = find(
       store,
-      `(file_path = ? OR file_path LIKE ('%' || ?)) AND name = ? AND ${SYMBOL_KINDS}`,
-      [split.filePath, split.filePath, split.symbol],
+      `(file_path = ? OR ${tail.sql}) AND name = ? AND ${SYMBOL_KINDS}`,
+      [split.filePath, ...tail.params, split.symbol],
       "file_path, qualified_name",
     );
     if (found.rows.length > 0) return found;
   }
 
-  // 1. File path (contains '/' or ends in a source extension)
+  // 1. File path (contains '/' or ends in a source extension) — the whole
+  //    path or a trailing part of it.
   if (input.includes("/") || SOURCE_EXTS.test(input)) {
+    const tail = endsWith("file_path", `/${input}`);
     const found = find(
       store,
-      `(file_path = ? OR file_path LIKE ('%' || ?)) AND ${SYMBOL_KINDS}`,
-      [input, input],
+      `(file_path = ? OR ${tail.sql}) AND ${SYMBOL_KINDS}`,
+      [input, ...tail.params],
       "file_path, qualified_name",
     );
     if (found.rows.length > 0) return found;
@@ -148,23 +168,22 @@ function resolveWith(store: GraphStore, input: string, project: string): Found {
     if (found.rows.length > 0) return found;
   }
 
-  // 3. Dotted suffix (e.g. components.foo)
+  // 3. Dotted suffix (e.g. components.foo) — the whole qn or a trailing part.
   if (input.includes(".") && !input.includes("/")) {
     const exact = find(store, `qualified_name = ? AND ${SYMBOL_KINDS}`, [input], "id");
     if (exact.rows.length > 0) return exact;
-    const suffix = find(
-      store,
-      `qualified_name LIKE ('%' || ?) AND ${SYMBOL_KINDS}`,
-      [input],
-      "qualified_name",
-    );
+    const tail = endsWith("qualified_name", `.${input}`);
+    const suffix = find(store, `${tail.sql} AND ${SYMBOL_KINDS}`, tail.params, "qualified_name");
     if (suffix.rows.length > 0) return suffix;
   }
 
   // 4. Bare name — exact matches first, so `useInject` is not made ambiguous
-  //    by `useInjectFoo`; substring matches only when nothing is named exactly.
+  //    by `useInjectFoo`. Substring matches only when nothing is named exactly,
+  //    and only for a bare identifier: an input with a `/` or `.` names a path
+  //    or a qn, and passing `IdCard.vue` off as `Card.vue` here would undo the
+  //    boundary matching above.
   const exact = find(store, `name = ? AND ${SYMBOL_KINDS}`, [input], "file_path, qualified_name");
-  if (exact.rows.length > 0) return exact;
+  if (exact.rows.length > 0 || /[/.]/.test(input)) return exact;
   return find(store, `name LIKE ? AND ${SYMBOL_KINDS}`, [`%${input}%`], "file_path, qualified_name");
 }
 

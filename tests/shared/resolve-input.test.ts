@@ -144,9 +144,80 @@ describe("shared resolveInput", () => {
       expect(resolveInput("src/x.ts::lower", "some-other-name", dbPath).kind).toBe("none");
     });
 
-    it("a miss is final — it does not fall through to a bare-name match", () => {
+    it("a miss does not fall back to matching the bare symbol name", () => {
       fn("src/a.ts", "src.a.useApp");
       expect(resolveInput("src/elsewhere.ts::useApp", project, dbPath).kind).toBe("none");
+    });
+
+    it("lists equally nested same-named definitions instead of picking one", () => {
+      const foo = fn("src/widget.ts", "src.widget.Foo.render", "method");
+      const bar = fn("src/widget.ts", "src.widget.Bar.render", "method");
+      const r = resolveInput("src/widget.ts::render", project, dbPath);
+      expect(r.kind).toBe("multi");
+      if (r.kind === "multi") {
+        expect(r.total).toBe(2);
+        expect(r.candidates.map((c) => c.id).sort()).toEqual([foo.id, bar.id].sort());
+      }
+    });
+
+    it("counts every matching file, not a capped window of rows", () => {
+      // Each file holds one top-level `main` and eight nested ones — enough
+      // rows that a row-capped query would run out before the last files.
+      const files = MAX_CANDIDATES + 5;
+      for (let i = 0; i < files; i++) {
+        fn(`pkg${i}/index.ts`, `pkg${i}.index.main`);
+        for (let j = 0; j < 8; j++) fn(`pkg${i}/index.ts`, `pkg${i}.index.C${j}.main`, "method");
+      }
+      const r = resolveInput("index.ts::main", project, dbPath);
+      expect(r.kind).toBe("multi");
+      if (r.kind === "multi") {
+        expect(r.total).toBe(files);
+        expect(r.candidates).toHaveLength(MAX_CANDIDATES);
+        expect(r.candidates.every((c) => c.kind === "function")).toBe(true);
+      }
+    });
+
+    it("a `::` inside a name or a qn still resolves (C++ classes, JSON keys)", () => {
+      const cls = store.createNode({
+        kind: "class", name: "simplecpp::TokenList::Stream", file_path: "vendored/simplecpp.cpp",
+        qualified_name: "test-project.vendored.simplecpp.simplecpp::TokenList::Stream",
+      });
+      const method = store.createNode({
+        kind: "method", name: "readChar", file_path: "vendored/simplecpp.cpp",
+        qualified_name: "test-project.vendored.simplecpp.simplecpp::TokenList::Stream.readChar",
+      });
+      expect(resolveInput("simplecpp::TokenList::Stream", project, dbPath)).toMatchObject({
+        kind: "single", symbol: { id: cls.id },
+      });
+      expect(resolveInput(method.qualified_name!, project, dbPath)).toMatchObject({
+        kind: "single", symbol: { id: method.id },
+      });
+      // The display form splits at the first `::`, so the symbol keeps its own.
+      expect(
+        resolveInput("vendored/simplecpp.cpp::simplecpp::TokenList::Stream.readChar", project, dbPath),
+      ).toMatchObject({ kind: "single", symbol: { id: method.id } });
+    });
+  });
+
+  describe("suffixes match from a boundary, exactly", () => {
+    it("a file name does not match a longer file name ending in it", () => {
+      const card = store.createNode({ kind: "module", name: "Card.vue", file_path: "apps/Card.vue", qualified_name: "test-project.apps.Card" });
+      store.createNode({ kind: "module", name: "IdCard.vue", file_path: "apps/IdCard.vue", qualified_name: "test-project.apps.IdCard" });
+      expect(resolveInput("Card.vue", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: card.id } });
+    });
+
+    it("a lone near-miss does not resolve either", () => {
+      store.createNode({ kind: "module", name: "IdCard.vue", file_path: "apps/IdCard.vue", qualified_name: "test-project.apps.IdCard" });
+      store.createNode({ kind: "function", name: "mount", file_path: "apps/IdCard.vue", qualified_name: "test-project.apps.IdCard.mount" });
+      store.createNode({ kind: "function", name: "render", file_path: "src/data.ts", qualified_name: "test-project.src.data.render" });
+      expect(resolveInput("Card.vue", project, dbPath).kind).toBe("none");
+      expect(resolveInput("Card.vue:mount", project, dbPath).kind).toBe("none");
+      expect(resolveInput("a.render", project, dbPath).kind).toBe("none");
+    });
+
+    it("a dotted suffix ending at a segment boundary still resolves", () => {
+      const node = store.createNode({ kind: "function", name: "render", file_path: "src/data.ts", qualified_name: "test-project.src.data.render" });
+      expect(resolveInput("data.render", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: node.id } });
     });
   });
 
