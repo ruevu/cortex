@@ -251,6 +251,110 @@ describe.skipIf(BINARY_MISSING)("decision dispatcher contract", () => {
     expect(res.content[0].text).toMatch(/^No results: why_was_this_built\(/);
   });
 
+  // T-0a40 — the dispatcher used to validate only against the all-optional
+  // superset shape, so no action's own required fields were ever enforced, and
+  // `propose` silently dropped a caller's `description`.
+  describe("per-action argument validation", () => {
+    it("propose stores a caller's description", async () => {
+      const res = await dispatch({
+        repo_path: repo,
+        action: "propose",
+        title: "Propose with description",
+        description: "what was decided",
+        rationale: "because",
+      });
+      expect(res.isError).toBeFalsy();
+      const id = JSON.parse(res.content[0].text).id;
+      const got = JSON.parse((await dispatch({ repo_path: repo, action: "get", id })).content[0].text);
+      expect(got.description).toBe("what was decided");
+      expect(got.status).toBe("proposed");
+      await dispatch({ repo_path: repo, action: "delete", id });
+    });
+
+    it("propose without description still falls back to resolution", async () => {
+      const res = await dispatch({
+        repo_path: repo,
+        action: "propose",
+        title: "Propose narrative only",
+        problem: "p",
+        resolution: "the resolution",
+        rationale: "because",
+      });
+      expect(res.isError).toBeFalsy();
+      const d = JSON.parse(res.content[0].text);
+      expect(d.description).toBe("the resolution");
+      expect(d.resolution).toBe("the resolution");
+      await dispatch({ repo_path: repo, action: "delete", id: d.id });
+    });
+
+    it("propose with neither description nor resolution is refused", async () => {
+      const res = await dispatch({ repo_path: repo, action: "propose", title: "Empty", rationale: "r" });
+      expect(res.isError).toBe(true);
+      expect(res.content[0].text).toMatch(/^ERROR reason=malformed_input/);
+      expect(res.content[0].text).toContain("description");
+      expect(res.content[0].text).toContain("resolution");
+    });
+
+    // One row per action that has a required field: omit that field and the
+    // dispatcher must refuse with malformed_input naming it.
+    const MISSING: Array<[string, string, Record<string, unknown>]> = [
+      ["create", "description", { title: "t", rationale: "r" }],
+      ["create", "rationale", { title: "t", description: "d" }],
+      ["create", "title", { description: "d", rationale: "r" }],
+      ["propose", "title", { description: "d", rationale: "r" }],
+      ["propose", "rationale", { title: "t", description: "d" }],
+      ["update", "id", { title: "t" }],
+      ["delete", "id", {}],
+      ["get", "id", {}],
+      ["search", "query", {}],
+      ["why", "qualified_name", {}],
+      ["link", "decision_id", { target: "src/server.ts" }],
+      ["link", "target", { decision_id: "D-zzzz" }],
+      ["promote", "tier", { id: "D-zzzz" }],
+      ["supersede", "old_decision_id", { title: "t", problem: "p", resolution: "r", rationale: "r" }],
+      ["supersede", "problem", { old_decision_id: "D-zzzz", title: "t", resolution: "r", rationale: "r" }],
+      ["reconcile", "verdict", { decision_id: "D-zzzz" }],
+    ];
+    for (const [action, field, rest] of MISSING) {
+      it(`${action} without ${field} is refused as malformed_input`, async () => {
+        const res = await dispatch({ repo_path: repo, action, ...rest });
+        expect(res.isError).toBe(true);
+        expect(res.content[0].text).toMatch(/^ERROR reason=malformed_input/);
+        expect(res.content[0].text).toContain(`decision action '${action}'`);
+        expect(res.content[0].text).toContain(field);
+      });
+    }
+
+    it("create still accepts a null problem/resolution (the superset always allowed it)", async () => {
+      const res = await dispatch({
+        repo_path: repo,
+        action: "create",
+        title: "Null narrative",
+        description: "d",
+        rationale: "r",
+        problem: null,
+        resolution: null,
+      });
+      expect(res.isError).toBeFalsy();
+      await dispatch({ repo_path: repo, action: "delete", id: JSON.parse(res.content[0].text).id });
+    });
+
+    it("validation does not strip fields the action consumes outside its own shape (create + author)", async () => {
+      const res = await dispatch({
+        repo_path: repo,
+        action: "create",
+        title: "Authored create",
+        description: "d",
+        rationale: "r",
+        author: "cortex:test",
+      });
+      expect(res.isError).toBeFalsy();
+      const d = JSON.parse(res.content[0].text);
+      expect(d.author).toBe("cortex:test");
+      await dispatch({ repo_path: repo, action: "delete", id: d.id });
+    });
+  });
+
   describe("freshness parity: only `why` is freshness-aware", () => {
     it("`why` carries freshness and `get` does not, even when the graph is stale", async () => {
       // Seed a decision so `get` returns a hit (ok envelope, the case where a

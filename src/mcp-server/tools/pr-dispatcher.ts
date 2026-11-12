@@ -3,8 +3,18 @@ import { z } from "zod";
 import { registerTool, type RepoContext, type RepoContextResolver } from "../repo-context.js";
 import { error as errorResponse } from "../response.js";
 import type { EventBus } from "../../events/bus.js";
-import { openPRAction, addPRTouchAction, mergePRAction, getPRAction } from "./pr-tools.js";
+import {
+  openPRAction,
+  addPRTouchAction,
+  mergePRAction,
+  getPRAction,
+  openPRSchema,
+  addPRTouchSchema,
+  mergePRSchema,
+  getPRSchema,
+} from "./pr-tools.js";
 import { RepoPathField } from "./shared-fields.js";
+import { checkActionArgs } from "./action-args.js";
 
 // ---------------------------------------------------------------------------
 // Consolidated `pr` MCP dispatcher (Task 3.3).
@@ -50,6 +60,22 @@ const prShape = {
 
 const prSchema = z.object(prShape);
 
+type PRAction = z.infer<typeof prSchema>["action"];
+
+/**
+ * Each action's own schema — the source of its required fields (the superset
+ * `prShape` above makes everything optional, so it enforces none; T-0a40).
+ * `touch` is checked in the dispatcher's own vocabulary — `change`, not the
+ * inner `action` addPRTouchAction receives — so a refusal names the field the
+ * caller actually sends.
+ */
+const ACTION_SCHEMAS: Record<PRAction, z.ZodTypeAny> = {
+  open: openPRSchema,
+  touch: addPRTouchSchema.omit({ action: true }).extend({ change: addPRTouchSchema.shape.action }),
+  merge: mergePRSchema,
+  get: getPRSchema,
+};
+
 /**
  * The dispatching handler for the consolidated `pr` tool. Registers with
  * `{ resolver }` only (no freshnessAware — PR reads are not freshness-aware).
@@ -68,6 +94,11 @@ export const prHandler = (
     prSchema,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (ctx: RepoContext, args) => {
+      const schema = ACTION_SCHEMAS[args.action];
+      if (schema) {
+        const bad = checkActionArgs("pr", args.action, schema, args);
+        if (bad) return bad;
+      }
       switch (args.action) {
         case "open":
           return openPRAction(ctx, args as any, bus, indexerProject);

@@ -124,8 +124,10 @@ export interface UpdateDecisionInput {
 
 export interface ProposeDecisionInput {
   title: string;
-  problem: string;
-  resolution: string;
+  /** What was decided. Falls back to `resolution` when absent. */
+  description?: string;
+  problem?: string | null;
+  resolution?: string | null;
   rationale: string;
   alternatives?: Alternative[];
   governs?: string[];

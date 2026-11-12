@@ -325,7 +325,9 @@ export class DecisionService {
       id,
       seq,
       title: input.title,
-      description: input.resolution ?? null,
+      // A caller's own `description` wins; `resolution` is only the fallback
+      // for narrative-style proposals (seed skill, CLI) that send none.
+      description: input.description || input.resolution || null,
       rationale: input.rationale,
       problem: input.problem ?? null,
       resolution: input.resolution ?? null,

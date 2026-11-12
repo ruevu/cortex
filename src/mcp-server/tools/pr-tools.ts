@@ -41,7 +41,7 @@ const openPRShape = {
     })
     .optional(),
 } as const;
-const openPRSchema = z.object(openPRShape);
+export const openPRSchema = z.object(openPRShape);
 
 const addPRTouchShape = {
   repo_path: RepoPathField,
@@ -50,19 +50,19 @@ const addPRTouchShape = {
   node_name: z.string(),
   action: z.enum(["added", "modified"]),
 } as const;
-const addPRTouchSchema = z.object(addPRTouchShape);
+export const addPRTouchSchema = z.object(addPRTouchShape);
 
 const mergePRShape = {
   repo_path: RepoPathField,
   pr_number: z.number().int(),
 } as const;
-const mergePRSchema = z.object(mergePRShape);
+export const mergePRSchema = z.object(mergePRShape);
 
 const getPRShape = {
   repo_path: RepoPathField,
   pr_number: z.number().int(),
 } as const;
-const getPRSchema = z.object(getPRShape);
+export const getPRSchema = z.object(getPRShape);
 
 // ---------------------------------------------------------------------------
 // Extracted action functions — one per PR operation.

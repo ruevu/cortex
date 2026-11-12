@@ -44,11 +44,14 @@ const createDecisionShape = {
   alternatives: z.array(AlternativeSchema).optional().describe("Rejected alternatives with reasons"),
   governs: z.array(z.string()).optional().describe("Node IDs or file paths this decision governs"),
   references: z.array(z.string()).optional().describe("Node IDs of external reference nodes"),
-  problem: z.string().optional().describe("Narrative: what question this decision answers"),
-  resolution: z.string().optional().describe("Narrative: what was decided"),
+  // Nullable: the dispatcher's superset shape has always accepted null here,
+  // and the service stores it as null. Per-action validation must not start
+  // refusing it.
+  problem: z.string().nullable().optional().describe("Narrative: what question this decision answers"),
+  resolution: z.string().nullable().optional().describe("Narrative: what was decided"),
   thread: z.string().optional().describe("Caller-supplied thread/session id for origin provenance"),
 } as const;
-const createDecisionSchema = z.object(createDecisionShape);
+export const createDecisionSchema = z.object(createDecisionShape);
 
 const linkDecisionShape = {
   repo_path: RepoPathField,
@@ -58,7 +61,7 @@ const linkDecisionShape = {
     .optional()
     .describe("Edge type (default: GOVERNS)"),
 } as const;
-const linkDecisionSchema = z.object(linkDecisionShape);
+export const linkDecisionSchema = z.object(linkDecisionShape);
 
 const searchDecisionsShape = {
   repo_path: RepoPathField,
@@ -71,19 +74,19 @@ const searchDecisionsShape = {
   thread: z.string().min(1).optional()
     .describe("Exact match filter on origin_thread (never matches a NULL-origin row)"),
 } as const;
-const searchDecisionsSchema = z.object(searchDecisionsShape);
+export const searchDecisionsSchema = z.object(searchDecisionsShape);
 
 const getDecisionShape = {
   repo_path: RepoPathField,
   id: z.string().describe("Decision node ID"),
 } as const;
-const getDecisionSchema = z.object(getDecisionShape);
+export const getDecisionSchema = z.object(getDecisionShape);
 
 const deleteDecisionShape = {
   repo_path: RepoPathField,
   id: z.string().describe("Decision node ID"),
 } as const;
-const deleteDecisionSchema = z.object(deleteDecisionShape);
+export const deleteDecisionSchema = z.object(deleteDecisionShape);
 
 const updateDecisionShape = {
   repo_path: RepoPathField,
@@ -99,7 +102,7 @@ const updateDecisionShape = {
   governs: z.array(z.string()).optional().describe("Full set replacement of GOVERNS targets. [] clears all."),
   references: z.array(z.string()).optional().describe("Full set replacement of REFERENCES targets. [] clears all."),
 } as const;
-const updateDecisionSchema = z.object(updateDecisionShape);
+export const updateDecisionSchema = z.object(updateDecisionShape);
 
 const supersedeDecisionShape = {
   repo_path: RepoPathField,
@@ -112,13 +115,19 @@ const supersedeDecisionShape = {
   governs: z.array(z.string()).optional(),
   references: z.array(z.string()).optional(),
 } as const;
-const supersedeDecisionSchema = z.object(supersedeDecisionShape);
+export const supersedeDecisionSchema = z.object(supersedeDecisionShape);
 
+// `description` OR `resolution` is required (refined below), not both, and
+// `problem` is optional. Callers following "params as create" send
+// `description`; the seed-decisions skill and the CLI send `problem` +
+// `resolution`. Both are well-formed. Before T-0a40 a `description` was
+// silently dropped and neither pair was enforced.
 const proposeDecisionShape = {
   repo_path: RepoPathField,
   title: z.string(),
-  problem: z.string(),
-  resolution: z.string(),
+  description: z.string().optional().describe("What was decided; defaults to `resolution` when absent"),
+  problem: z.string().nullable().optional(),
+  resolution: z.string().nullable().optional(),
   rationale: z.string(),
   alternatives: z.array(AlternativeSchema).optional(),
   governs: z.array(z.string()).optional(),
@@ -128,13 +137,16 @@ const proposeDecisionShape = {
   provenance: ProvenanceSchema.optional().describe("Machine-derived source (commits/docs) for review verification"),
   thread: z.string().optional().describe("Caller-supplied thread/session id for origin provenance"),
 } as const;
-const proposeDecisionSchema = z.object(proposeDecisionShape);
+export const proposeDecisionSchema = z.object(proposeDecisionShape).refine(
+  (a) => Boolean(a.description) || Boolean(a.resolution),
+  { message: "provide `description` or `resolution` (what was decided)", path: ["description"] },
+);
 
 const whyWasThisBuiltShape = {
   repo_path: RepoPathField,
   qualified_name: z.string().describe("Qualified name, file path, or bare symbol name of the code entity"),
 } as const;
-const whyWasThisBuiltSchema = z.object(whyWasThisBuiltShape);
+export const whyWasThisBuiltSchema = z.object(whyWasThisBuiltShape);
 
 const decisionCandidatesShape = {
   repo_path: RepoPathField,
@@ -142,7 +154,7 @@ const decisionCandidatesShape = {
   base: z.string().min(1).optional()
     .describe("Git ref: scope candidates to base..HEAD (warm path, e.g. after a merge). Omit for whole-history cold start"),
 } as const;
-const decisionCandidatesSchema = z.object(decisionCandidatesShape);
+export const decisionCandidatesSchema = z.object(decisionCandidatesShape);
 
 // ---------------------------------------------------------------------------
 // Extracted per-action handler logic.
