@@ -17,7 +17,10 @@ permissions:
 
 jobs:
   tarball:
-    runs-on: macos-14 # arm64 — the only published sidecar platform
+    # macos-14 was retired: GitHub refuses the job with "The configuration
+    # 'macos-14-arm64-us-default' is not supported" and cancels it before any
+    # step runs, so v2.4.8 shipped with no tarball. macos-15 is the arm64 image.
+    runs-on: macos-15 # arm64 — the only published sidecar platform
     env:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
