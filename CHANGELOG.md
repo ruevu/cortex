@@ -55,13 +55,15 @@ All notable changes to Cortex are documented here. The format follows
   `name = ? OR name LIKE '%name%'` in one query, so `useInject` was ambiguous
   with `useInjectAll`, and `route` with the `router` module. Exact matches now
   come first; substring matching applies only when nothing has that exact
-  name, and only to a bare identifier. Decision, PR and todo nodes are no
-  longer candidates.
-- **Path and qualified-name suffixes match from a boundary, exactly.** They
-  were `LIKE '%…'` matches, so `Card.vue` matched `apps/IdCard.vue` and
-  `a.render` matched `…data.render` — a silent wrong answer whenever that was
-  the only match. A trailing part of a path must now start after a `/`, and of
-  a qualified name after a `.`, compared case-sensitively.
+  name, and only to an input with no `/` or `.`. Decision, PR and todo nodes
+  are no longer candidates.
+- **Path and qualified-name suffixes match from a boundary.** They were
+  `LIKE '%…'` matches, so `Card.vue` matched `apps/IdCard.vue` and `a.render`
+  matched `…data.render` — a silent wrong answer whenever that was the only
+  match. A trailing part of a path must now start after a `/`, and of a
+  qualified name after a `.` or a C++ `::`. Names compare case-sensitively; a
+  path ignores case only when nothing matches it exactly, and a leading `/` or
+  `./` on it is ignored.
 - **`.cortexignore` is documented.** The indexer has always skipped paths
   matched by a `.cortexignore` at the repo root (gitignore syntax, on top of
   `.gitignore`), but nothing said so. The README and the `index_repository`

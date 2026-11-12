@@ -181,14 +181,17 @@ show|where|calls`) take one symbol and resolve it through one shared resolver
    a C++ name or qn that itself contains `::` still resolves.
 2. `path:Name` (editor-jump style).
 3. A file path — the whole path, or a trailing part of it that starts after a
-   `/`: `Card.vue` is `apps/Card.vue`, never `apps/IdCard.vue`.
+   `/`: `Card.vue` is `apps/Card.vue`, never `apps/IdCard.vue`. A leading `/`
+   or `./` is ignored.
 4. A full qualified name, or a trailing part of one that starts after a `.`
-   (`widget.Widget.render`, never `…dget.Widget.render`).
+   or a C++ `::` (`widget.Widget.render`, `Stream.readChar`; never
+   `…dget.Widget.render`).
 5. A bare name — exact matches first; names that merely contain it only when
    nothing has that exact name, and only for an input with no `/` or `.`.
 
-Forms 1–4 compare exactly, case and `_` included. Only the substring step in
-form 5 is fuzzy (a case-insensitive `LIKE`).
+Names and qualified names compare exactly, case and `_` included. A path is
+retried ignoring ASCII case only when nothing matches it exactly. The only
+fuzzy step is form 5's substring match, which is a case-insensitive `LIKE`.
 
 When the input matches more than one symbol, the tool returns
 `ambiguous_input` listing up to 25 candidates in `path::Name` form, and
