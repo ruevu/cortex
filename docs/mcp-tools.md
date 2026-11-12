@@ -413,6 +413,12 @@ file paths. See
 
 **Params common to all actions:** `repo_path`, `action`.
 
+**Required fields are enforced per action.** The tool's advertised schema is a
+superset in which every field but `action` is optional; each call is then
+checked against its action's own params below, and one missing a required field
+is refused as `malformed_input` naming it (e.g. `decision action 'create':
+description: Required`).
+
 ### `action: "create"`
 Create a decision node.
 - **Params:** `title`, `description`, `rationale`,
@@ -423,8 +429,14 @@ Create a decision node.
 
 ### `action: "propose"`
 Create a decision in `status: "proposed"`.
-- **Params:** as `create`, plus `pr_number?`, `author?` (e.g.
-  `cortex:seed`), `provenance?` (machine-derived source for review).
+- **Params:** `title`, `rationale`, and **at least one of** `description` /
+  `resolution` (what was decided); `problem?`, `alternatives?`, `governs?`,
+  `references?`, `pr_number?`, `author?` (e.g. `cortex:seed`), `provenance?`
+  (machine-derived source for review).
+- **`description` vs `resolution`:** a `description` is stored as given; when
+  absent, `description` defaults to `resolution`. Send `description` alone (like
+  `create`) or the `problem`/`resolution` narrative pair (as the
+  `seed-decisions` skill does). Sending neither is `malformed_input`.
 - **Why:** for candidates that need human ratification before becoming active —
   including cold-start seeded decisions.
 
@@ -569,6 +581,12 @@ Action-dispatched tool for pull-request entities. PR entities live in the graph
 DB; the merge flow ratifies decisions in the same repo's decisions sidecar.
 
 **Params common to all actions:** `repo_path`, `action`.
+
+**Required fields are enforced per action.** The tool's advertised schema is a
+superset in which every field but `action` is optional; each call is then
+checked against its action's own params below, and one missing a required field
+is refused as `malformed_input` naming it (e.g. `pr action 'merge':
+pr_number: Required`).
 
 ### `action: "open"`
 Create a pull-request entity in the graph.
