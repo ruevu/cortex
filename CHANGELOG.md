@@ -62,8 +62,8 @@ All notable changes to Cortex are documented here. The format follows
   matched `…data.render` — a silent wrong answer whenever that was the only
   match. A trailing part of a path must now start after a `/`, and of a
   qualified name after a `.` or a C++ `::`. Names compare case-sensitively; a
-  path ignores case only when nothing matches it exactly, and a leading `/` or
-  `./` on it is ignored.
+  path ignores case only when no file has that exact path, and a leading `/`
+  or `./` on it is ignored.
 - **`.cortexignore` is documented.** The indexer has always skipped paths
   matched by a `.cortexignore` at the repo root (gitignore syntax, on top of
   `.gitignore`), but nothing said so. The README and the `index_repository`

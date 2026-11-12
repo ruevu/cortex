@@ -171,32 +171,36 @@ Read-path tools for navigating the indexed knowledge graph. Prefer these over
 show|where|calls`) take one symbol and resolve it through one shared resolver
 (`src/shared/resolve-input.ts`). It accepts, tried in this order:
 
-1. **`path::Name`** — the form these tools print for a JS/TS symbol
+1. A full qualified name (`<project>.src.widget.Widget.render`).
+2. **`path::Name`** — the form these tools print for a JS/TS symbol
    (`src/server.ts::handleRequest`, `src/widget.ts::Widget.render`), accepted
    for any source extension and split at the first `::`. A shortened path
    (`server.ts::handleRequest`) is fine. Per matching file it takes the
    least-nested definition (`render` over `Widget.render`); two equally nested
    ones (`Foo.render`, `Bar.render`) are both listed rather than one picked.
    An input that matches no file this way falls through to the forms below, so
-   a C++ name or qn that itself contains `::` still resolves.
-2. `path:Name` (editor-jump style).
-3. A file path — the whole path, or a trailing part of it that starts after a
+   a C++ name that itself contains `::` still resolves.
+3. `path:Name` (editor-jump style).
+4. A file path — the whole path, or a trailing part of it that starts after a
    `/`: `Card.vue` is `apps/Card.vue`, never `apps/IdCard.vue`. A leading `/`
-   or `./` is ignored.
-4. A full qualified name, or a trailing part of one that starts after a `.`
-   or a C++ `::` (`widget.Widget.render`, `Stream.readChar`; never
+   or `./` is ignored; paths are repo-relative, so an absolute path does not
+   resolve.
+5. A trailing part of a qualified name that starts after a `.` or a C++ `::`
+   (`widget.Widget.render`, `Stream.readChar`, `TokenList::Stream`; never
    `…dget.Widget.render`).
-5. A bare name — exact matches first; names that merely contain it only when
+6. A bare name — exact matches first; names that merely contain it only when
    nothing has that exact name, and only for an input with no `/` or `.`.
 
 Names and qualified names compare exactly, case and `_` included. A path is
-retried ignoring ASCII case only when nothing matches it exactly. The only
-fuzzy step is form 5's substring match, which is a case-insensitive `LIKE`.
+matched ignoring ASCII case only when no file has that exact path, so a symbol
+missing from `src/Upper.ts` is never answered from `src/upper.ts`. The only
+fuzzy step is form 6's substring match, which is a case-insensitive `LIKE`.
 
 When the input matches more than one symbol, the tool returns
-`ambiguous_input` listing up to 25 candidates in `path::Name` form, and
-`showing 25 of N` beyond that; re-call with one of them. Whatever the input,
-the tool then works on the node the resolver chose (by id), never on another
+`ambiguous_input` listing up to 25 candidates, and `showing 25 of N` beyond
+that. The candidates are printed the way `search_graph` prints them
+(`path::Name` for JS/TS); re-call with one of them. Whatever the input, the
+tool then works on the node the resolver chose (by id), never on another
 definition that shares its name.
 
 ### `search_graph`
