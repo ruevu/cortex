@@ -196,7 +196,49 @@ describe("shared resolveInput", () => {
       expect(
         resolveInput("vendored/simplecpp.cpp::simplecpp::TokenList::Stream.readChar", project, dbPath),
       ).toMatchObject({ kind: "single", symbol: { id: method.id } });
+      // …and a symbol shortened to its last scopes matches from a `::`.
+      expect(resolveInput("vendored/simplecpp.cpp::Stream.readChar", project, dbPath)).toMatchObject({
+        kind: "single", symbol: { id: method.id },
+      });
     });
+
+    it("counts a C++ `::` scope as nesting", () => {
+      const outer = fn("src/file.cpp", "src.file.Outer.f", "method");
+      fn("src/file.cpp", "src.file.Outer::Inner.f", "method");
+      expect(resolveInput("src/file.cpp::f", project, dbPath)).toMatchObject({
+        kind: "single", symbol: { id: outer.id },
+      });
+    });
+  });
+
+  describe("paths as people type them", () => {
+    it("ignores a leading `/` or `./`", () => {
+      const card = store.createNode({ kind: "module", name: "Card.vue", file_path: "apps/Card.vue", qualified_name: "test-project.apps.Card" });
+      const mount = store.createNode({ kind: "function", name: "mount", file_path: "apps/Card.vue", qualified_name: "test-project.apps.Card.mount" });
+      expect(resolveInput("/apps/Card.vue", project, dbPath)).toMatchObject({ kind: "multi", total: 2 });
+      expect(resolveInput("./apps/Card.vue:mount", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: mount.id } });
+      expect(resolveInput("/apps/Card.vue::mount", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: mount.id } });
+      expect(card.id).not.toBe(mount.id);
+    });
+
+    it("matches a path ignoring case only when nothing matches it exactly", () => {
+      const upper = store.createNode({ kind: "module", name: "Upper.ts", file_path: "src/Upper.ts", qualified_name: "test-project.src.Upper" });
+      expect(resolveInput("src/upper.ts", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: upper.id } });
+      const lower = store.createNode({ kind: "module", name: "upper.ts", file_path: "src/upper.ts", qualified_name: "test-project.src.upper" });
+      expect(resolveInput("src/upper.ts", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: lower.id } });
+      expect(resolveInput("src/UPPER.ts", project, dbPath)).toMatchObject({ kind: "multi", total: 2 });
+    });
+  });
+
+  it("rows sharing one qualified name resolve as that one symbol", () => {
+    const first = store.createNode({ kind: "function", name: "dup", file_path: "src/d.ts", qualified_name: "test-project.src.d.dup" });
+    store.createNode({ kind: "function", name: "dup", file_path: "src/d.ts", qualified_name: "test-project.src.d.dup" });
+    for (const p of [project, "some-other-name"]) {
+      const r = resolveInput("src/d.ts::dup", p, dbPath);
+      expect(r.kind).toBe("single");
+    }
+    expect(resolveInput("dup", project, dbPath).kind).toBe("single");
+    expect(first.qualified_name).toBe("test-project.src.d.dup");
   });
 
   describe("suffixes match from a boundary, exactly", () => {
@@ -218,6 +260,16 @@ describe("shared resolveInput", () => {
     it("a dotted suffix ending at a segment boundary still resolves", () => {
       const node = store.createNode({ kind: "function", name: "render", file_path: "src/data.ts", qualified_name: "test-project.src.data.render" });
       expect(resolveInput("data.render", project, dbPath)).toMatchObject({ kind: "single", symbol: { id: node.id } });
+    });
+
+    it("a dotted suffix may start at a C++ `::` scope", () => {
+      const method = store.createNode({
+        kind: "method", name: "readChar", file_path: "vendored/simplecpp.cpp",
+        qualified_name: "test-project.vendored.simplecpp.simplecpp::TokenList::Stream.readChar",
+      });
+      for (const input of ["Stream.readChar", "TokenList::Stream.readChar"]) {
+        expect(resolveInput(input, project, dbPath)).toMatchObject({ kind: "single", symbol: { id: method.id } });
+      }
     });
   });
 
