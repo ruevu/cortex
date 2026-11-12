@@ -410,4 +410,26 @@ describe.skipIf(BINARY_MISSING)("show dispatcher contract", () => {
       expect(res.content[0].text).toContain("Unknown show action: bogus");
     });
   });
+
+  // T-0a40 follow-up: show refuses a missing required field through the same
+  // per-action schema check as decision/pr/todo, with the same message shape.
+  describe("per-action argument validation", () => {
+    const step = { caption: "c", refs: ["src/a.ts"] };
+    const MISSING: Array<[string, string, Record<string, unknown>]> = [
+      ["story", "title", { steps: [step] }],
+      ["story", "steps", { title: "t" }],
+      ["advance", "story_id", { step: 1 }],
+      ["advance", "step", { story_id: "S-zzzz" }],
+      ["get", "story_id", {}],
+      ["close", "story_id", {}],
+      ["delete", "story_id", {}],
+    ];
+    for (const [action, field, rest] of MISSING) {
+      it(`${action} without ${field} is refused as malformed_input`, async () => {
+        const res = await dispatch({ repo_path: repo, action, ...rest });
+        expect(res.isError).toBe(true);
+        expect(res.content[0].text).toContain(`ERROR reason=malformed_input: show action '${action}': ${field}: Required`);
+      });
+    }
+  });
 });

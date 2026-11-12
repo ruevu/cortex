@@ -359,9 +359,9 @@ function cmdPropose(cmd: DecisionCommand, ctx: ProjectContext): void {
       "Usage: cortex decision propose --title=... --rationale=... --description=...  (or --problem=... --resolution=...)",
     );
   }
-  const { db, svc } = openService(ctx);
+  const { db, svc, origin } = openService(ctx);
   try {
-    const d = svc.propose({ title, description, problem, resolution, rationale });
+    const d = svc.propose({ title, description, problem, resolution, rationale, origin });
     process.stdout.write(JSON.stringify(d, null, 2) + "\n");
   } finally {
     db.close();

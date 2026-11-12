@@ -203,3 +203,30 @@ describe("todo tool per-call routing", () => {
     expect(res.content[0].text).toMatch(/repo_path required/);
   });
 });
+
+// T-0a40 follow-up: todo refuses a missing required field through the same
+// per-action schema check as decision/pr, with the same message shape.
+describe("todo per-action argument validation", () => {
+  let h: HarnessContext;
+  beforeAll(async () => { h = await createHarness(); });
+  afterAll(async () => { await h.close(); });
+
+  const MISSING: Array<[string, string, Record<string, unknown>]> = [
+    ["propose", "summary", {}],
+    ["get", "id", {}],
+    ["search", "query", {}],
+    ["update", "id", { summary: "s" }],
+    ["link", "id", { target: "src/a.ts", relation: "GOVERNS" }],
+    ["link", "target", { id: "T-zzzz", relation: "GOVERNS" }],
+    ["link", "relation", { id: "T-zzzz", target: "src/a.ts" }],
+    ["transition", "id", { to: "done" }],
+    ["transition", "to", { id: "T-zzzz" }],
+  ];
+  for (const [action, field, rest] of MISSING) {
+    it(`${action} without ${field} is refused as malformed_input`, async () => {
+      const res = await callTool(h, "todo", { action, ...rest });
+      expect(res.isError).toBe(true);
+      expect(res.content[0].text).toContain(`ERROR reason=malformed_input: todo action '${action}': ${field}: Required`);
+    });
+  }
+});

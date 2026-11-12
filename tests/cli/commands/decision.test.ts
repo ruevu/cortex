@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execSync } from "node:child_process";
 import { runDecisionCommand } from "../../../src/cli/commands/decision.js";
 import type { ProjectContext } from "../../../src/cli/context.js";
 
@@ -68,6 +69,21 @@ describe("cortex decision commands", () => {
     writeSpy.mockRestore();
     expect(out.description).toBe("the resolution");
     expect(out.problem).toBe("p");
+  });
+
+  it("propose records origin like every other mutating CLI command", async () => {
+    execSync("git init -q -b feature/x && git -c user.email=t@t -c user.name=t commit -q --allow-empty --no-gpg-sign -m seed", { cwd: dir });
+    const head = execSync("git rev-parse HEAD", { cwd: dir }).toString().trim();
+    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    await runDecisionCommand({
+      command: "propose",
+      positionals: [],
+      flags: { title: "With origin", description: "d", rationale: "r" },
+    }, { ...ctx, gitRoot: dir });
+    const out = JSON.parse(writeSpy.mock.calls.map((c) => String(c[0])).join(""));
+    writeSpy.mockRestore();
+    expect(out.origin_branch).toBe("feature/x");
+    expect(out.origin_commit).toBe(head);
   });
 
   it("propose with neither --description nor --resolution throws UsageError", async () => {
