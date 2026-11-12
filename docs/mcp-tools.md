@@ -165,6 +165,29 @@ Read-path tools for navigating the indexed knowledge graph. Prefer these over
 `Grep`/`Read` for any structural question (see the routing table in
 [`CLAUDE.md`](../CLAUDE.md)).
 
+### Naming a symbol
+
+`get_code_snippet`, `trace_path` and `context_pack` (and `cortex code
+show|where|calls`) take one symbol and resolve it through one shared resolver
+(`src/shared/resolve-input.ts`). It accepts, tried in this order:
+
+1. **`path::Name`** — the form these tools print for a JS/TS symbol
+   (`src/server.ts::handleRequest`, `src/widget.ts::Widget.render`), accepted
+   for any source extension. Matched exactly, `_` and case included. A
+   shortened path (`server.ts::handleRequest`) is fine; it is ambiguous only
+   when several files end that way, and then lists one candidate per file.
+2. `path:Name` (editor-jump style).
+3. A file path.
+4. A full qualified name, or a dotted suffix of one (`widget.Widget.render`).
+5. A bare name — exact matches first; names that merely contain it only when
+   nothing has that exact name.
+
+When the input matches more than one symbol, the tool returns
+`ambiguous_input` listing up to 25 candidates in `path::Name` form, and
+`showing 25 of N` beyond that; re-call with one of them. Whatever the input,
+the tool then works on the node the resolver chose (by id), never on another
+definition that shares its name.
+
 ### `search_graph`
 Find code entities by name, label, or qualified-name pattern.
 - **Params:** `repo_path`, `name_pattern?`, `label?`, `qn_pattern?`,
@@ -202,10 +225,10 @@ Find code entities by name, label, or qualified-name pattern.
 
 ### `get_code_snippet`
 Read the source for a known symbol.
-- **Params:** `repo_path`, `qualified_name` (qn, file path, dotted suffix, or
-  bare name).
-- **Returns:** the source slice; `ambiguous_input` with candidates when a bare
-  name matches more than one symbol. When the fetched symbol is *gated*
+- **Params:** `repo_path`, `qualified_name` (any form in
+  [Naming a symbol](#naming-a-symbol)).
+- **Returns:** the source slice; `ambiguous_input` with candidates when the
+  input matches more than one symbol. When the fetched symbol is *gated*
   (governed by a decision or with caller count above `CORTEX_BRIEF_FANOUT`,
   default 12), a **briefing headline** is appended naming the governing decision
   and its reconciliation verdict; pass `CORTEX_BRIEF=0` to disable.
@@ -214,8 +237,12 @@ Read the source for a known symbol.
 
 ### `trace_path`
 Trace call chains from a function.
-- **Params:** `repo_path`, `function_name`, `mode` (`calls` = outbound,
-  `callers` = inbound), `max_depth?` (1–10).
+- **Params:** `repo_path`, `function_name` (any form in
+  [Naming a symbol](#naming-a-symbol)), `mode` (`calls` = outbound,
+  `callers` = inbound), `max_depth?` (1–10, default 3).
+- **Behavior:** walks `CALLS`/`IMPORTS` edges from the resolved node. The edges
+  are the indexer's: where it bound a call by name rather than through an
+  import, a same-named function elsewhere in the repo can appear as a callee.
 - **Returns:** depth-annotated nodes (`[d=N] kind qn (file:lines)`);
   `ambiguous_input` if the name is not unique. When the fetched symbol is *gated*
   (governed by a decision or with caller count above `CORTEX_BRIEF_FANOUT`,
@@ -227,15 +254,16 @@ Trace call chains from a function.
 ### `context_pack`
 Full context bundle for a symbol in **one** call — the preferred first call when
 orienting on an unfamiliar symbol.
-- **Params:** `repo_path`, `qualified_name` (qn, file path, dotted suffix, or
-  bare name).
+- **Params:** `repo_path`, `qualified_name` (any form in
+  [Naming a symbol](#naming-a-symbol)).
 - **Returns:** five labeled text sections — `## SNIPPET` (source), `## CALLERS`
   (direct, cap 10), `## CALLEES` (direct, cap 10), `## GOVERNING DECISIONS`
   (cap 5), `## RECENT COMMITS` (last 5 touching the file). Capped lists show
-  `(showing N of M)` when truncated. `ambiguous_input` with candidates when a
-  bare name matches more than one symbol; `empty` when it matches none.
+  `(showing N of M)` when truncated. `ambiguous_input` with candidates when the
+  input matches more than one symbol; `empty` when it matches none.
 - **Behavior:** resolves the name **once**, then composes `get_code_snippet` +
-  `trace_path` (callers & callees, depth 1) + `decision({action:"why"})` + `git log`.
+  `trace_path` (callers & callees, depth 1) + `decision({action:"why"})` + `git log`,
+  all on that one node.
   Each section is best-effort: a failing source degrades to `- (none)` /
   `(unavailable)` rather than sinking the pack. Freshness-aware.
 - **Why:** collapses the 4-roundtrip symbol-exploration loop into one turn. Use
@@ -341,6 +369,16 @@ Build (or incrementally update) the knowledge graph for a repo.
   the server's open handle. Uses a content-hash build cache and serializes
   concurrent CLI/MCP indexing with `withIndexLock`. Registered
   `allowUnindexed`.
+- **Excluding paths:** the indexer skips anything matched by a
+  `.cortexignore` at the checkout root — gitignore syntax, applied on top of
+  `.gitignore`. Use it for committed code you don't want in the graph:
+  vendored or minified bundles, generated clients. Left in, they add thousands
+  of nodes, and their calls (`t.map(…)`, `e.reduce(…)`) get bound by name to
+  unrelated functions in your own code. Commit it, then reindex: a file that
+  a new pattern excludes is dropped on the next index, like a deleted file.
+  Commit first because the build cache is keyed on the committed tree, so an
+  uncommitted `.cortexignore` can be served the snapshot cached for that
+  commit. See the [README](../README.md#excluding-files-cortexignore).
 - **Why:** this is the tool that brings a repo's graph online and keeps it
   current. See [graph-storage.md](architecture/graph-storage.md#write-path-staging-build--transactional-publish).
 
