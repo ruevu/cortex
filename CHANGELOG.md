@@ -18,6 +18,17 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.9] — 2026-11-13
+
+### Fixed
+
+- **Releases get their sidecar tarball again.** The `sidecar-tarball`
+  workflow ran on `macos-14`, an image GitHub has retired: it refused the
+  v2.4.8 job ("The configuration 'macos-14-arm64-us-default' is not
+  supported") before any step ran, so that release shipped without the
+  tarball Mesh embeds. It now runs on `macos-15`, also arm64. The v2.4.8
+  tarball was built from this branch with a manual run against the v2.4.8 tag.
+
 ## [2.4.8] — 2026-11-12
 
 ### Fixed
@@ -2975,6 +2986,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.9]: https://github.com/ruevu/cortex/releases/tag/v2.4.9
 [2.4.8]: https://github.com/ruevu/cortex/releases/tag/v2.4.8
 [2.4.6]: https://github.com/ruevu/cortex/releases/tag/v2.4.6
 [2.4.5]: https://github.com/ruevu/cortex/releases/tag/v2.4.5
