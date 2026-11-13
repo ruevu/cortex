@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GraphStore } from "../../src/graph/store.js";
 import { runAssertion } from "../../evals/src/assertions/runner.js";
-import { RATE_METRICS } from "../../evals/src/assertions/verdicts.js";
+import { RATE_METRICS, applyRatchet } from "../../evals/src/assertions/verdicts.js";
 import { UNIVERSAL_ASSERTIONS } from "../../evals/src/assertions/universal.js";
+import type { AssertionResult, Baseline } from "../../evals/src/assertions/types.js";
 
 function metric(name: string) {
   const a = UNIVERSAL_ASSERTIONS.find((x) => x.name === name);
@@ -152,6 +153,53 @@ describe("universal metrics", () => {
 
     const r = runAssertion(metric("per_language_function_density"), { dbPath });
     expect(r.observed).toEqual({ rs: 1 });
+  });
+
+  describe("graph quality metrics", () => {
+    /** A CALLS edge carrying the indexer's resolution data. */
+    function scoredCall(src: { id: string }, tgt: { id: string }, confidence: number) {
+      store.createEdge({
+        source_id: src.id, target_id: tgt.id, relation: "CALLS",
+        data: { callee: "target", strategy: "unique_name", confidence },
+      });
+    }
+
+    function judged(name: string, observed: number, perAssertion: Record<string, number>): boolean | null {
+      const result: AssertionResult = { assertion: metric(name), observed, passed: null, surprised: false };
+      const baseline: Baseline = {
+        target: "t", captured_at: "2026-11-13T00:00:00.000Z",
+        nodes_by_label: {}, edges_by_type: {}, per_assertion: perAssertion,
+      };
+      return applyRatchet([result], baseline)[0]!.passed;
+    }
+
+    it("graph_quality metrics read the shared computation", () => {
+      const src = store.createNode({ kind: "function", name: "caller", qualified_name: "p.a.caller", file_path: "a.ts" });
+      const tgt = store.createNode({ kind: "function", name: "target", qualified_name: "p.b.target", file_path: "b.ts" });
+      scoredCall(src, tgt, 0.95); // resolved
+      scoredCall(src, tgt, 0.3);  // name guess
+
+      expect(runAssertion(metric("guess_share"), { dbPath }).observed).toBe(50);
+      expect(runAssertion(metric("suspect_hub_share"), { dbPath }).observed).toBe(0);
+      // Two edges are too few to judge, so the verdict reads ok.
+      expect(runAssertion(metric("quality_level"), { dbPath }).observed).toBe(0);
+    });
+
+    it("quality metrics measure nothing on an empty graph", () => {
+      for (const name of ["guess_share", "suspect_hub_share", "quality_level"]) {
+        expect(runAssertion(metric(name), { dbPath }).observed, name).toBeNull();
+      }
+    });
+
+    it("quality_level regresses on any worsening", () => {
+      expect(judged("quality_level", 1, { quality_level: 0 })).toBe(false);
+      expect(judged("quality_level", 0, { quality_level: 0 })).toBe(true);
+    });
+
+    it("guess_share tolerates half a point", () => {
+      expect(judged("guess_share", 32.0, { guess_share: 31.6 })).toBe(true);
+      expect(judged("guess_share", 32.2, { guess_share: 31.6 })).toBe(false);
+    });
   });
 
   it("every RATE_METRICS name is a real universal assertion", () => {

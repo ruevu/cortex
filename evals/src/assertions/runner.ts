@@ -1,6 +1,7 @@
 import { GraphStore } from "../../../src/graph/store.js";
 import type { Assertion, AssertionResult, Predicate } from "./types.js";
 import { computeLanguageDensity } from "./universal.js";
+import { computeGraphQuality, LEVEL_RANK } from "../../../src/quality/compute.js";
 
 export type RunnerContext = {
   dbPath: string;
@@ -51,6 +52,21 @@ export function runAssertion(a: Assertion, ctx: RunnerContext): AssertionResult 
     }
     case "language_density": {
       observed = computeLanguageDensity(store);
+      break;
+    }
+    case "graph_quality": {
+      const q = computeGraphQuality(store.queryRaw.bind(store));
+      if (q.calls.total === 0) {
+        // No CALLS edges: a share over nothing is not a measurement. Reporting
+        // 0 would make a total resolution collapse read as a perfect score.
+        observed = null;
+        break;
+      }
+      switch (a.query.field) {
+        case "guess_share_pct": observed = q.guess_share * 100; break;
+        case "hub_share_pct": observed = q.hub_share * 100; break;
+        case "level_rank": observed = LEVEL_RANK[q.verdict.level]; break;
+      }
       break;
     }
     case "tool_call":

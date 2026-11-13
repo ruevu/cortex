@@ -107,6 +107,38 @@ export const UNIVERSAL_ASSERTIONS: Assertion[] = [
     scope: "universal",
     direction: "higher_is_better",
   },
+  // Graph quality (decision D-kn9w). All three read computeGraphQuality, the
+  // computation behind the product's quality report, and are the gate
+  // "Cortex and Mesh must not regress from today" is checked against.
+  {
+    fix_id: "universal",
+    name: "guess_share",
+    description:
+      "percentage of CALLS edges that are name guesses: confidence below 0.45, or a member call into a suspect hub",
+    query: { kind: "graph_quality", field: "guess_share_pct" },
+    baseline_expected: "pass",
+    scope: "universal",
+    direction: "lower_is_better",
+  },
+  {
+    fix_id: "universal",
+    name: "suspect_hub_share",
+    description:
+      "percentage of CALLS edges that are member calls into a suspect hub — a free function reached through 10+ distinct receivers, i.e. a built-in method bound by name",
+    query: { kind: "graph_quality", field: "hub_share_pct" },
+    baseline_expected: "pass",
+    scope: "universal",
+    direction: "lower_is_better",
+  },
+  {
+    fix_id: "universal",
+    name: "quality_level",
+    description: "the graph-quality verdict as an ordinal — ok 0, degraded 1, poor 2; any worsening is a regression",
+    query: { kind: "graph_quality", field: "level_rank" },
+    baseline_expected: "pass",
+    scope: "universal",
+    direction: "lower_is_better",
+  },
 ];
 
 /** Callables per file, keyed by file extension. The question this answers is
