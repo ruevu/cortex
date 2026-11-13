@@ -54,3 +54,22 @@ export interface GraphQuality {
     note: string | null;
   };
 }
+
+/**
+ * What `cortex index` writes to `<checkout>/.cortex/quality.json` after every
+ * index (src/quality/run-report.ts), and what `cortex quality`, the
+ * SessionStart line and `GET /api/quality` read back.
+ *
+ * `version` gates the shape: a reader ignores any other version rather than
+ * misreading it, so a field may only be added or removed together with a
+ * version bump.
+ */
+export interface QualityReport extends GraphQuality {
+  version: 1;
+  /** When the report was computed, ISO 8601. */
+  computed_at: string;
+  /** The checkout whose graph this describes. */
+  repo_path: string;
+  /** HEAD when the graph was indexed; null outside a git repository. */
+  indexed_commit: string | null;
+}

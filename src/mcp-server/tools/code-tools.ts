@@ -40,6 +40,7 @@ import { Registry } from "../../db/registry.js";
 import { readIndexStatus, renderIndexStatus } from "../../db/index-status.js";
 import { captureIndexMeta } from "../../graph/capture-index-meta.js";
 import { runStalenessSweep } from "../../staleness/run-sweep.js";
+import { runQualityReport } from "../../quality/run-report.js";
 import { invalidateFreshness } from "../freshness.js";
 import { stagingDbPath, cleanupStagingDb } from "../../db/staging-path.js";
 import { publishStagedDb } from "../../db/swap-graph-db.js";
@@ -412,6 +413,9 @@ async function runIndexRepository(
       if (servedFromCache && cacheKey) {
         const out = await withFrames(`imported from cache key ${cacheKey.slice(0, 12)}…`, repoPath, stagePath, dbPath, signal);
         runStalenessSweep(repoPath, dbPath); // before captureIndexMeta — see run-sweep.ts
+        // before captureIndexMeta: /api/quality's ETag is the index baseline — see run-report.ts
+        const quality = runQualityReport(repoPath, dbPath);
+        if (quality && out.content[0]) out.content[0].text += "\n" + quality;
         captureIndexMeta(dbPath, repoPath);
         invalidateFreshness(repoPath);
         registerRepo();
@@ -449,6 +453,9 @@ async function runIndexRepository(
       const baseText = result.content?.[0]?.text ?? "indexed";
       const out = await withFrames(baseText, repoPath, stagePath, dbPath, signal);
       runStalenessSweep(repoPath, dbPath); // before captureIndexMeta — see run-sweep.ts
+      // before captureIndexMeta: /api/quality's ETag is the index baseline — see run-report.ts
+      const quality = runQualityReport(repoPath, dbPath);
+      if (quality && out.content[0]) out.content[0].text += "\n" + quality;
       captureIndexMeta(dbPath, repoPath);
       invalidateFreshness(repoPath);
       registerRepo();
