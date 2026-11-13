@@ -21,6 +21,7 @@ top-level `version` field equal to `1`.
 |---|---|---|---|---|
 | `/api/health` | **exempt** | — | `{ version, ok: true }` | — |
 | `/api/freshness` | required | `?project=<name>` | `{ version, state, commits_behind?, dirty?, indexed_at?, note? }` | — |
+| `/api/quality` | required | `?project=<name>` | `{ version, report }` (`report` nullable) | `ETag` / `304` |
 | `/api/projects` | required | — | `{ version, projects[], active }` | — † |
 | `/api/graph` | required | `?project=<name>` | `{ version, nodes[], edges[], project }` | `ETag` / `304` |
 | `/api/frames` | required | `?project=<name>` | `{ version, frames[], stage }` | `ETag` / `304` |
@@ -52,6 +53,19 @@ parameter or an invalid decision `:id` returns **`400 Bad Request`**.
   the verdict carries them; the optional **`note`** is emitted on the
   `unknown`/`empty` verdicts (e.g. when the project is not in the registry, or
   the graph DB is unavailable). Honors `CORTEX_FRESHNESS=0` (always `fresh`).
+- **`/api/quality`** returns the graph-quality report the last index wrote for
+  the resolved project's checkout (`.cortex/quality.json`), never a live
+  recomputation. `report` is `null` when the project is not registered, when
+  its checkout has no readable report of the current version (indexed by an
+  older release, or the file is damaged), or with `CORTEX_QUALITY=0`.
+  Otherwise it carries `calls` (`total`, `resolved`, `likely`, `name_guess`,
+  `unscored`, `hub_edges`), `guess_share` and `hub_share` (0..1, unrounded),
+  `hub_count`, up to ten `suspect_hubs[]` (`name`, `file`, `calls`,
+  `receivers`), `verdict` (`level`: `ok | degraded | poor`, `judged`,
+  `reasons[]`, `advice`, `note`), `computed_at` and `indexed_commit`. The report
+  changes only when an index publishes, so it revalidates on the same
+  index-baseline `ETag` as the data endpoints. See
+  [graph-quality.md](../architecture/graph-quality.md).
 - **`/api/graph`** — `nodes[]` mirror the graph store rows; each entry in
   `edges[]` includes both the raw `source_id`/`target_id` and the viewer
   `source`/`target` aliases. `project` echoes the resolved project (or `null`).
@@ -77,6 +91,7 @@ The exact field-level shape of each response is the corresponding
 |---|---|
 | `/api/health` | [`health.schema.json`](./health.schema.json) |
 | `/api/freshness` | [`freshness.schema.json`](./freshness.schema.json) |
+| `/api/quality` | [`quality.schema.json`](./quality.schema.json) |
 | `/api/projects` | [`projects.schema.json`](./projects.schema.json) |
 | `/api/graph` | [`graph.schema.json`](./graph.schema.json) |
 | `/api/frames` | [`frames.schema.json`](./frames.schema.json) |
@@ -140,6 +155,7 @@ Errors use a fixed `{ "error": "<message>" }` body:
 | `CORTEX_CORS_ORIGINS` | unset | Comma-separated browser-origin allowlist; only an allowlisted `Origin` is reflected. |
 | `CORTEX_API_STRICT` | unset | `1` → response-validation failures return `500` in production too. |
 | `CORTEX_FRESHNESS` | unset | `0` → the freshness verdict is always `fresh` (the ETag is unaffected). |
+| `CORTEX_QUALITY` | unset | `0` → `/api/quality` serves `report: null`, and no index writes a report (the ETag is unaffected). |
 
 ### A note on CORS
 

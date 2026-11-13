@@ -1,0 +1,165 @@
+{
+  "$ref": "#/definitions/quality",
+  "definitions": {
+    "quality": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "report": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "computed_at": {
+                  "type": "string"
+                },
+                "indexed_commit": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "calls": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "number"
+                    },
+                    "resolved": {
+                      "type": "number"
+                    },
+                    "likely": {
+                      "type": "number"
+                    },
+                    "name_guess": {
+                      "type": "number"
+                    },
+                    "unscored": {
+                      "type": "number"
+                    },
+                    "hub_edges": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "total",
+                    "resolved",
+                    "likely",
+                    "name_guess",
+                    "unscored",
+                    "hub_edges"
+                  ],
+                  "additionalProperties": false
+                },
+                "guess_share": {
+                  "type": "number"
+                },
+                "hub_share": {
+                  "type": "number"
+                },
+                "hub_count": {
+                  "type": "number"
+                },
+                "suspect_hubs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "file": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "calls": {
+                        "type": "number"
+                      },
+                      "receivers": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "file",
+                      "calls",
+                      "receivers"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "verdict": {
+                  "type": "object",
+                  "properties": {
+                    "level": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "degraded",
+                        "poor"
+                      ]
+                    },
+                    "judged": {
+                      "type": "boolean"
+                    },
+                    "reasons": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "advice": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "level",
+                    "judged",
+                    "reasons",
+                    "advice",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "computed_at",
+                "indexed_commit",
+                "calls",
+                "guess_share",
+                "hub_share",
+                "hub_count",
+                "suspect_hubs",
+                "verdict"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "report"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

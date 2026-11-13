@@ -369,6 +369,51 @@ export type FreshnessResponse = z.infer<typeof FreshnessResponseSchema>;
 
 export const HealthResponseSchema = z.object({ version: Version, ok: z.literal(true) });
 
+// ── Graph quality ────────────────────────────────────────────────────────────
+/** How much of the CALLS graph is a guess, as the LAST INDEX measured it: the
+ *  `<checkout>/.cortex/quality.json` report (src/quality/run-report.ts), never
+ *  recomputed per request. Published vocabulary only (D-w4eg) — `resolved`,
+ *  `likely`, `name_guess`, `unscored`; graph-wide shares, never a per-edge
+ *  confidence (D-b1gd). Thresholds and the verdict are D-kn9w's. */
+export const QualityLevelSchema = z.enum(["ok", "degraded", "poor"]);
+export const SuspectHubSchema = z.object({
+  name: z.string(),
+  file: z.string().nullable(),
+  calls: z.number(),
+  receivers: z.number(),
+});
+/** The report as served: the file's own `version` and `repo_path` describe the
+ *  FILE, not the graph, and are left out (the envelope carries the contract
+ *  version, and `?project=` already names the checkout). */
+export const QualityReportWireSchema = z.object({
+  computed_at: z.string(),
+  indexed_commit: z.string().nullable(),
+  calls: z.object({
+    total: z.number(),
+    resolved: z.number(),
+    likely: z.number(),
+    name_guess: z.number(),
+    unscored: z.number(),
+    hub_edges: z.number(),
+  }),
+  guess_share: z.number(),
+  hub_share: z.number(),
+  hub_count: z.number(),
+  suspect_hubs: z.array(SuspectHubSchema),
+  verdict: z.object({
+    level: QualityLevelSchema,
+    judged: z.boolean(),
+    reasons: z.array(z.string()),
+    advice: z.string().nullable(),
+    note: z.string().nullable(),
+  }),
+});
+export type QualityReportWire = z.infer<typeof QualityReportWireSchema>;
+/** `report: null` = nothing to serve: the project is unregistered, its checkout
+ *  has no readable report of the current version, or `CORTEX_QUALITY=0`. */
+export const QualityResponseSchema = z.object({ version: Version, report: QualityReportWireSchema.nullable() });
+export type QualityResponse = z.infer<typeof QualityResponseSchema>;
+
 // ── Request inputs (fail-closed → 400) ───────────────────────────────────────
 export const ProjectParamSchema = z.string().min(1).max(200).optional();
 export const DecisionIdParamSchema = z.string().min(1).max(200);
@@ -400,4 +445,5 @@ export const RESPONSE_SCHEMAS = {
   "show-advance-ack": ShowAdvanceAckResponseSchema,
   freshness: FreshnessResponseSchema,
   health: HealthResponseSchema,
+  quality: QualityResponseSchema,
 } as const;
