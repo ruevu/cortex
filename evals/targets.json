@@ -48,6 +48,7 @@
     { "name": "jq",              "repo_url": "https://github.com/jqlang/jq.git",               "sha": "master", "packs": ["universal"], "suites": ["corpus"] },
     { "name": "vapor",           "repo_url": "https://github.com/vapor/vapor.git",             "sha": "main", "packs": ["universal"], "suites": ["corpus"] },
     { "name": "jellyfin",        "repo_url": "https://github.com/jellyfin/jellyfin.git",       "sha": "master", "packs": ["universal"], "suites": ["corpus"] },
-    { "name": "exposed",         "repo_url": "https://github.com/JetBrains/Exposed.git",       "sha": "main", "packs": ["universal"], "suites": ["corpus"] }
+    { "name": "exposed",         "repo_url": "https://github.com/JetBrains/Exposed.git",       "sha": "main", "packs": ["universal"], "suites": ["corpus"] },
+    { "name": "cortex", "repo_url": "https://github.com/ruevu/cortex.git", "sha": "add6ed69f59334420802ab5aa8ab3cdad19973e6", "packs": ["universal"], "suites": ["self"] }
   ]
 }

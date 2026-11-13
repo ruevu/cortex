@@ -1,7 +1,8 @@
 #!/usr/bin/env tsx
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { acquireTarget, compareGraphShape, forceReindex } from "./target.js";
+import { baselinePath, loadTargets } from "./target-config.js";
 import { computeScorecard } from "./scorecard.js";
 import { runAssertion } from "./assertions/runner.js";
 import { runToolAssertion } from "./assertions/tool-runner.js";
@@ -11,7 +12,6 @@ import { mergeImprovements } from "./baselines.js";
 import { writeReportArtifacts, type TargetReport } from "./report.js";
 import { strictGate, type FailedTarget } from "./gate.js";
 import type {
-  Targets,
   Target,
   AssertionResult,
   Baseline,
@@ -43,13 +43,8 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
-function loadTargets(): Targets {
-  const txt = readFileSync(resolve("evals/targets.json"), "utf-8");
-  return JSON.parse(txt) as Targets;
-}
-
-function loadBaseline(target: string): Baseline | null {
-  const p = resolve("evals/baselines", `${target}.json`);
+function loadBaseline(target: Target): Baseline | null {
+  const p = baselinePath(target);
   if (!existsSync(p)) return null;
   return JSON.parse(readFileSync(p, "utf-8")) as Baseline;
 }
@@ -118,7 +113,7 @@ function runTarget(
     }
   }
 
-  const baseline = loadBaseline(acquired.name);
+  const baseline = loadBaseline(target);
   return {
     target: acquired.name,
     scorecard,
@@ -151,8 +146,9 @@ function captureBaseline(target: Target, pathOverride?: string): void {
         }),
     ),
   };
-  mkdirSync(resolve("evals/baselines"), { recursive: true });
-  writeFileSync(resolve("evals/baselines", `${target.name}.json`), JSON.stringify(baseline, null, 2));
+  const path = baselinePath(target);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(baseline, null, 2));
   console.log(`Baseline captured for ${target.name}.`);
 }
 
@@ -165,7 +161,7 @@ export function selectTargets(targets: Target[], suite: string): Target[] {
 
 function main(): void {
   const args = parseArgs(process.argv);
-  const { targets } = loadTargets();
+  const targets = loadTargets();
 
   if (args.captureBaseline) {
     const t = targets.find((x) => x.name === args.captureBaseline);
@@ -210,10 +206,10 @@ function main(): void {
         console.log(`[${r.target}] no improvements to adopt.`);
         continue;
       }
-      writeFileSync(
-        resolve("evals/baselines", `${r.target}.json`),
-        JSON.stringify(baseline, null, 2),
-      );
+      // Every report came from a target in `selected`; looking it up by name
+      // carries its private flag, so an adopted baseline stays where it was.
+      const target = selected.find((t) => t.name === r.target)!;
+      writeFileSync(baselinePath(target), JSON.stringify(baseline, null, 2));
       console.log(`[${r.target}] adopted ${adopted.length}: ${adopted.join(", ")}`);
     }
   }

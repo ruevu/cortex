@@ -1,0 +1,61 @@
+{
+  "target": "cortex",
+  "captured_at": "2026-11-13T12:02:33.561Z",
+  "source_sha": "add6ed69f59334420802ab5aa8ab3cdad19973e6",
+  "nodes_by_label": {
+    "channel": 3,
+    "class": 37,
+    "file": 726,
+    "folder": 101,
+    "function": 1457,
+    "interface": 210,
+    "method": 186,
+    "module": 725,
+    "project": 1,
+    "route": 35,
+    "section": 837,
+    "type": 153,
+    "variable": 1790
+  },
+  "edges_by_type": {
+    "CALLS": 4272,
+    "CONFIGURES": 44,
+    "CONTAINS_FILE": 726,
+    "CONTAINS_FOLDER": 96,
+    "DEFINES": 5396,
+    "DEFINES_METHOD": 186,
+    "ENCLOSES": 269,
+    "FILE_CHANGES_WITH": 86,
+    "HTTP_CALLS": 30,
+    "IMPORTS": 1595,
+    "LISTENS_ON": 5,
+    "RAISES": 60,
+    "SEMANTICALLY_RELATED": 157,
+    "SIMILAR_TO": 62,
+    "USAGE": 348,
+    "WRITES": 73
+  },
+  "per_assertion": {
+    "file_sourced_calls": 0,
+    "call_attribution_rate": 62.172284644194754,
+    "qn_collisions": 0,
+    "orphan_definition_rate": 0,
+    "per_language_function_density": {
+      "json": 0,
+      "sh": 0.9,
+      "yml": 0,
+      "md": 0,
+      "html": 0,
+      "ts": 2.3448275862068964,
+      "py": 2,
+      "sql": 0,
+      "tsx": 2.764705882352941,
+      "js": 7.689655172413793,
+      "css": 0
+    },
+    "guess_share": 33.26310861423221,
+    "suspect_hub_share": 9.925093632958802,
+    "unscored_share": 0.1404494382022472,
+    "quality_level": 0
+  }
+}

@@ -18,6 +18,7 @@
     "dev:viewer": "vite dev src/viewer",
     "build:viewer": "vite build src/viewer",
     "eval": "tsx evals/src/cli.ts",
+    "eval:gate": "tsx evals/src/cli.ts --suite=self --strict",
     "test": "vitest run",
     "test:watch": "vitest",
     "gen:api-schemas": "tsx scripts/gen-api-schemas.ts",
