@@ -54,8 +54,12 @@ describe("indexerIdentity", () => {
 
 /**
  * The wiring, end to end, with a fake indexer: a shell script that logs each
- * run and writes the graph file it is pointed at. FAKE_INDEXER_FAIL makes it
- * write that file and then exit non-zero — a build that died part-way.
+ * run and writes FAKE_INDEXER_BUILD into the graph file it is pointed at.
+ * Like the real cortex-indexer it is INCREMENTAL — the real one keeps per-file
+ * hashes inside graph.db, so over an unchanged tree an existing graph is a
+ * no-op that exits 0 — and a fake that always rewrote the file could not tell
+ * a rebuild from a restamp. FAKE_INDEXER_FAIL makes it write the file and
+ * then exit non-zero: a build that died part-way.
  */
 describe("acquireTarget's graph cache", () => {
   const saved = { ...process.env };
@@ -83,7 +87,8 @@ describe("acquireTarget's graph cache", () => {
       [
         "#!/bin/sh",
         'echo run >> "$FAKE_INDEXER_LOG"',
-        ': > "$CORTEX_DB"',
+        'if [ -f "$CORTEX_DB" ]; then exit 0; fi',
+        'printf "%s" "$FAKE_INDEXER_BUILD" > "$CORTEX_DB"',
         'if [ -n "$FAKE_INDEXER_FAIL" ]; then exit 1; fi',
         "exit 0",
         "",
@@ -96,6 +101,7 @@ describe("acquireTarget's graph cache", () => {
     age(join(source, ".git/HEAD"), 3_600);
     process.env.CORTEX_INDEXER_PATH = fake;
     process.env.FAKE_INDEXER_LOG = log;
+    process.env.FAKE_INDEXER_BUILD = "build-1";
     delete process.env.FAKE_INDEXER_FAIL;
   });
 
@@ -111,13 +117,17 @@ describe("acquireTarget's graph cache", () => {
     expect(runs()).toBe(1);
   });
 
-  it("rebuilds when the indexer binary changes", () => {
+  it("rebuilds from scratch when the indexer binary changes", () => {
     acquireTarget(target());
+    process.env.FAKE_INDEXER_BUILD = "build-2";
     const later = Date.now() / 1000 + 60;
     utimesSync(fake, later, later);
 
     expect(acquireTarget(target()).indexer_seconds).not.toBeNull();
     expect(runs()).toBe(2);
+    // The new binary's graph — not the old graph, restamped. Over an
+    // unchanged tree the incremental indexer leaves an existing graph alone.
+    expect(readFileSync(join(cacheDir(), "graph.db"), "utf-8")).toBe("build-2");
   });
 
   it("never reuses a graph from a build that failed", () => {

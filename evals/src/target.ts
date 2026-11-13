@@ -120,6 +120,13 @@ function maybeReindex(workdir: string, graphDbPath: string): number | null {
   // leave a graph.db newer than HEAD; if the previous stamp survived, the
   // next run would find "fresh graph, same indexer" and grade the wreckage.
   rmSync(identityPath, { force: true });
+  // Then the graph itself: every rebuild starts from nothing. cortex-indexer
+  // is incremental — it keeps per-file hashes inside graph.db, and over an
+  // unchanged tree (a pinned target never changes) it exits 0 having rebuilt
+  // nothing. Pointed at the old graph, a new binary would leave the old
+  // binary's edges in place, and the stamp below would certify them as the
+  // new one's: the gate would grade every indexer change on its predecessor.
+  removeGraph(graphDbPath);
   const start = Date.now();
   execFileSync(
     bin,
@@ -167,13 +174,19 @@ export function compareGraphShape(
   return { stable: differences.length === 0, differences };
 }
 
+/** The graph file and its SQLite WAL siblings. A stale -wal left beside a new
+ *  graph.db would be replayed into it on open. */
+function removeGraph(graphDbPath: string): void {
+  rmSync(graphDbPath, { force: true });
+  rmSync(`${graphDbPath}-shm`, { force: true });
+  rmSync(`${graphDbPath}-wal`, { force: true });
+}
+
 /** Index unconditionally. maybeReindex skips when the cached graph.db is newer
  *  than the workdir's .git/HEAD, which would make a determinism run compare a
  *  graph against itself and always report stable. */
 export function forceReindex(workdir: string, graphDbPath: string): number {
-  rmSync(graphDbPath, { force: true });
-  rmSync(`${graphDbPath}-shm`, { force: true });
-  rmSync(`${graphDbPath}-wal`, { force: true });
+  removeGraph(graphDbPath);
   const seconds = maybeReindex(workdir, graphDbPath);
   return seconds ?? 0;
 }
