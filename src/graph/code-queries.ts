@@ -131,18 +131,31 @@ export function getGraphSchema(
   return { labels, edgeTypes };
 }
 
+/** One node by primary key, scoped to the project like every other read here. */
+export function getNodeById(store: GraphStore, project: string, id: string): IndexerNode | null {
+  return (
+    store.queryRaw<IndexerNode>("SELECT * FROM nodes WHERE id = ? AND project = ?", [id, project])[0] ??
+    null
+  );
+}
+
+/**
+ * Walk CALLS/IMPORTS edges outward (`calls`) or inward (`callers`) from one
+ * node, given by primary key.
+ *
+ * The start is an id, never a name. Choosing among same-named definitions is
+ * the resolver's job (shared/resolve-input.ts), which reports ambiguity rather
+ * than guessing. This used to take a bare name and pick `LIMIT 1` with no
+ * ordering, so on a monorepo with eleven `useApp`s every caller — trace_path,
+ * context_pack, `cortex code where` — traced whichever one SQLite returned
+ * first, after having resolved the right one.
+ */
 export function tracePath(
   store: GraphStore,
   project: string,
-  params: { function_name: string; mode: string; max_depth?: number }
+  params: { node_id: string; mode: string; max_depth?: number }
 ): Array<{ node: IndexerNode; depth: number }> {
-  const startNodes = store.queryRaw<IndexerNode>(
-    `SELECT * FROM nodes WHERE project = ? AND name = ? AND ${CODE_KIND_FILTER} LIMIT 1`,
-    [project, params.function_name]
-  );
-  if (startNodes.length === 0) return [];
-
-  const startId = startNodes[0].id;
+  const startId = params.node_id;
   const direction = params.mode === "callers" ? "inbound" : "outbound";
   const maxDepth = params.max_depth ?? 3;
 

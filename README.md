@@ -333,6 +333,19 @@ The indexer and Cortex's TypeScript layer share a single SQLite file (`.cortex/d
 
 There is **no decision data in `.cortex/db`** — decisions live in the durable out-of-repo sidecar `~/.cortex/<repoId>/decisions.db` and are never overwritten by reindexing. See [docs/architecture/decisions-storage.md](docs/architecture/decisions-storage.md) for the rationale.
 
+### Excluding files: `.cortexignore`
+
+The indexer skips paths matched by a `.cortexignore` file at the checkout root. It uses gitignore syntax and applies on top of `.gitignore`. Use it for code that is committed but that you don't want in the graph: vendored or minified bundles, generated API clients, large fixtures. Left in, they can add thousands of nodes. Worse, their calls (`t.map(…)`, `e.reduce(…)`) get bound by name to unrelated functions in your own code, and those false callers show up in `trace_path` and `context_pack`.
+
+```gitignore
+# .cortexignore
+libs/ui/src/vendor/
+apps/web/src/externalScripts/
+**/*.min.js
+```
+
+Commit it, then reindex: the next index drops newly excluded files from the graph, the same as deleted files. Commit first because `index_repository` reuses a build cached for the same commit, so it can serve the previous graph for an uncommitted `.cortexignore`.
+
 ### Known limitations
 
 The C indexer has two open issues that affect multi-project workflows: the dump pass replaces the entire `nodes`/`edges` tables (not project-scoped), and IDs collide across DBs because they restart at `ctx-1` for each indexed repo. See [docs/architecture/known-limitations.md](docs/architecture/known-limitations.md) for the canonical multi-project workflow using `scripts/frame-extraction/merge-indexed-db.ts`.

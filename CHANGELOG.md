@@ -18,6 +18,58 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.10] — 2026-11-13
+
+### Fixed
+
+- **`trace_path`, `context_pack` and `cortex code where|calls` trace the
+  symbol they resolved.** Having resolved the input to one node, they looked
+  its bare name up again with `LIMIT 1` and no ordering. In a repo with several
+  same-named definitions — a monorepo with a `useApp` per app — they answered
+  for whichever one SQLite returned first: another app's caller, callees the
+  symbol never calls, all reported under the name that was asked about. They
+  now walk from the resolved node's id, and `get_code_snippet` and
+  `context_pack` read that node by id rather than re-matching its qualified
+  name with `LIKE`.
+- **The `path::Name` IDs the tools print resolve back.** `search_graph`,
+  `trace_path` and `context_pack` show a JS/TS symbol as
+  `path/to/file.ts::Name`, but `trace_path` could not resolve that form and
+  answered "No results" for every ID copied from a result — so a symbol seemed
+  to have two IDs, only one of which had calls. The shared resolver now reads
+  it exactly, for any source extension, so `trace_path`, `context_pack`,
+  `get_code_snippet` and `cortex code show|where|calls` all accept it. A
+  shortened path (`use-app.ts::useApp`) lists one candidate per matching file
+  — its least-nested definition, or every one nested equally deep.
+- **An ambiguous name lists its candidates — up to 25, with the true count.**
+  The list stopped at five with no sign that more existed, which in a monorepo
+  often left out the definition wanted. It now shows up to 25, says
+  `showing 25 of N` past that, and prints each candidate the way
+  `search_graph` does (`path::Name` for JS/TS), a form the tools now accept
+  back.
+- **The resolver closes the database handle it opens.** Every resolution left
+  a SQLite connection open for the life of the MCP server.
+
+### Changed
+
+- **An exact name beats names that merely contain it.** A bare name matched
+  `name = ? OR name LIKE '%name%'` in one query, so `useInject` was ambiguous
+  with `useInjectAll`, and `route` with the `router` module. Exact matches now
+  come first; substring matching applies only when nothing has that exact
+  name, and only to an input with no `/` or `.`. Decision, PR and todo nodes
+  are no longer candidates.
+- **Path and qualified-name suffixes match from a boundary.** They were
+  `LIKE '%…'` matches, so `Card.vue` matched `apps/IdCard.vue` and `a.render`
+  matched `…data.render` — a silent wrong answer whenever that was the only
+  match. A trailing part of a path must now start after a `/`, and of a
+  qualified name after a `.` or a C++ `::`. Names compare case-sensitively; a
+  path ignores case only when no file has that exact path, and a leading `/`
+  or `./` on it is ignored.
+- **`.cortexignore` is documented.** Every indexer release Cortex has pinned
+  skips paths matched by a `.cortexignore` at the repo root (gitignore syntax,
+  on top of `.gitignore`), but nothing said so. The README and the `index_repository`
+  reference now do, with the case for it: committed vendor or minified bundles
+  otherwise become thousands of nodes whose calls bind to unrelated functions
+  by name.
 ## [2.4.9] — 2026-11-13
 
 ### Fixed
@@ -2986,6 +3038,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.10]: https://github.com/ruevu/cortex/releases/tag/v2.4.10
 [2.4.9]: https://github.com/ruevu/cortex/releases/tag/v2.4.9
 [2.4.8]: https://github.com/ruevu/cortex/releases/tag/v2.4.8
 [2.4.6]: https://github.com/ruevu/cortex/releases/tag/v2.4.6

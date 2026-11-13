@@ -4,6 +4,27 @@ import { IndexerNode } from "../../graph/code-queries.js";
 import { ok, error as errorResponse } from "../response.js";
 import { denormalize } from "../qualified-name.js";
 import type { RepoContext } from "../repo-context.js";
+import type { ResolvedSymbol } from "../../shared/resolve-input.js";
+
+/**
+ * The `ambiguous_input` body every symbol-taking tool returns. Candidates are
+ * printed in the same `path::Symbol` display form search_graph uses, which the
+ * resolver accepts back verbatim, and the header says how many were left off.
+ */
+export function ambiguousInputMessage(
+  input: string,
+  r: { candidates: ResolvedSymbol[]; total: number },
+): string {
+  const shown = r.candidates.length;
+  const header =
+    r.total > shown
+      ? `Multiple matches for '${input}' (showing ${shown} of ${r.total} — narrow it, e.g. path/to/file.ts::Name)`
+      : `Multiple matches for '${input}'`;
+  const lines = r.candidates.map(
+    (c, i) => `  ${i + 1}. ${denormalize(c.qn, c.file_path)}  (${c.kind}, ${c.file_path})`,
+  );
+  return `${header}. Pick one and re-call:\n${lines.join("\n")}`;
+}
 
 /**
  * Derive the project name from the addressed repo's graph DB.

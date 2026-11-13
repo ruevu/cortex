@@ -2,7 +2,8 @@ import { resolveInput as sharedResolve, type ResolvedSymbol } from "../shared/re
 import { DomainError } from "./errors.js";
 
 export type { ResolvedSymbol } from "../shared/resolve-input.js";
-export type Disambiguation = { candidates: ResolvedSymbol[]; input: string };
+/** `candidates` is capped (see MAX_CANDIDATES); `total` is the true count. */
+export type Disambiguation = { candidates: ResolvedSymbol[]; total: number; input: string };
 
 const SOURCE_EXTS = new RegExp("\\.(vue|tsx?|jsx?|py|go|rs|java|cs|cpp|c|h|rb|php|swift|kt)$");
 
@@ -23,5 +24,5 @@ export function resolveInput(
     throw new DomainError(`no symbol matched '${input}'`, tipFor(input));
   }
   if (r.kind === "single") return r.symbol;
-  return { candidates: r.candidates, input: r.input };
+  return { candidates: r.candidates, total: r.total, input: r.input };
 }

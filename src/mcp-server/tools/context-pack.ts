@@ -2,14 +2,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { searchGraph, tracePath, IndexerNode } from "../../graph/code-queries.js";
-import { resolveInput } from "../../shared/resolve-input.js";
-import { normalize, denormalize } from "../qualified-name.js";
+import { getNodeById, tracePath, IndexerNode } from "../../graph/code-queries.js";
+import { resolveInput, type ResolvedSymbol } from "../../shared/resolve-input.js";
+import { denormalize } from "../qualified-name.js";
 import { ok, empty, error as errorResponse } from "../response.js";
 import { symbolMissHint } from "./search-format.js";
 import { DecisionSearch } from "../../decisions/search.js";
 import { registerTool, type RepoContext, type RepoContextResolver } from "../repo-context.js";
-import { projectFromCtx, readSnippet } from "./code-tools-shared.js";
+import { projectFromCtx, readSnippet, ambiguousInputMessage } from "./code-tools-shared.js";
 import { RepoPathField } from "./shared-fields.js";
 
 const execFileAsync = promisify(execFile);
@@ -28,21 +28,16 @@ const contextPackSchema = z.object(contextPackShape);
 type ResolveResult =
   | { kind: "single"; node: IndexerNode }
   | { kind: "none" }
-  | { kind: "multi"; candidates: Array<{ qn: string; kind: string; file_path: string }> };
+  | { kind: "multi"; candidates: ResolvedSymbol[]; total: number };
 
 function resolveNode(ctx: RepoContext, project: string, qualified_name: string): ResolveResult {
-  if (!qualified_name.includes("::")) {
-    const resolved = resolveInput(qualified_name, project, ctx.graphDbPath);
-    if (resolved.kind === "none") return { kind: "none" };
-    if (resolved.kind === "multi") return { kind: "multi", candidates: resolved.candidates };
-    const nodes = searchGraph(ctx.store, project, { qn_pattern: resolved.symbol.qn });
-    if (nodes.length === 0) return { kind: "none" };
-    return { kind: "single", node: nodes[0] };
+  const resolved = resolveInput(qualified_name, project, ctx.graphDbPath);
+  if (resolved.kind === "none") return { kind: "none" };
+  if (resolved.kind === "multi") {
+    return { kind: "multi", candidates: resolved.candidates, total: resolved.total };
   }
-  const qn = normalize(qualified_name, project);
-  const nodes = searchGraph(ctx.store, project, { qn_pattern: qn });
-  if (nodes.length === 0) return { kind: "none" };
-  return { kind: "single", node: nodes[0] };
+  const node = getNodeById(ctx.store, project, resolved.symbol.id);
+  return node ? { kind: "single", node } : { kind: "none" };
 }
 
 function safe<T>(fn: () => T, fallback: T): T {
@@ -79,29 +74,23 @@ export async function buildContextPack(ctx: RepoContext, qualified_name: string)
   const resolved = resolveNode(ctx, project, qualified_name);
   if (resolved.kind === "none") return empty(`context_pack(${qualified_name})`, symbolMissHint());
   if (resolved.kind === "multi") {
-    const candidatesList = resolved.candidates
-      .map((c, i) => `  ${i + 1}. ${c.qn}  (${c.kind}, ${c.file_path})`)
-      .join("\n");
-    return errorResponse(
-      "ambiguous_input",
-      `Multiple matches for '${qualified_name}'. Pick one and re-call:\n${candidatesList}`,
-    );
+    return errorResponse("ambiguous_input", ambiguousInputMessage(qualified_name, resolved));
   }
 
   const node = resolved.node;
-  // Stored qns are dot-form, so in practice only the `.` split fires here; the
-  // `::` alternation is defensive — `::` appears only in the input display form.
-  const bareName = node.qualified_name.split(/::|\./).pop() ?? qualified_name;
 
   const snippetRes = await readSnippet(ctx, project, node);
   const snippetText = snippetRes.isError ? "(unavailable)" : snippetRes.content[0]?.text ?? "(unavailable)";
 
+  // Callers and callees of THIS node, by id. Deriving a bare name from its qn
+  // and tracing that once handed back a same-named sibling's edges — another
+  // app's caller, three callees the symbol never calls.
   const callers = safe(
-    () => tracePath(ctx.store, project, { function_name: bareName, mode: "callers", max_depth: 1 }),
+    () => tracePath(ctx.store, project, { node_id: node.id, mode: "callers", max_depth: 1 }),
     [] as Array<{ node: IndexerNode; depth: number }>,
   );
   const callees = safe(
-    () => tracePath(ctx.store, project, { function_name: bareName, mode: "calls", max_depth: 1 }),
+    () => tracePath(ctx.store, project, { node_id: node.id, mode: "calls", max_depth: 1 }),
     [] as Array<{ node: IndexerNode; depth: number }>,
   );
 
@@ -148,7 +137,7 @@ export async function buildContextPack(ctx: RepoContext, qualified_name: string)
 export function registerContextPackTool(server: McpServer, resolver: RepoContextResolver): void {
   server.tool(
     "context_pack",
-    "Get a full context bundle for a symbol in ONE call: source snippet, direct callers, direct callees, governing decisions, and recent commits. Composes get_code_snippet + trace_path + why_was_this_built. Input accepts a qualified name, file path, dotted suffix, or bare name; returns ambiguous_input with candidates if multiple symbols match.",
+    "Get a full context bundle for a symbol in ONE call: source snippet, direct callers, direct callees, governing decisions, and recent commits. Composes get_code_snippet + trace_path + why_was_this_built. Input accepts the path::Name form other tools print, a qualified name, file path, dotted suffix, or bare name; returns ambiguous_input with candidates if multiple symbols match.",
     contextPackShape,
     registerTool(
       "context_pack",
