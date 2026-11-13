@@ -171,6 +171,17 @@ describe("computeGraphQuality", () => {
       });
     });
 
+    it("hub share just under a tenth stays ok", () => {
+      // Pins the 10% hub threshold from below; "hub share alone degrades"
+      // pins it from above.
+      const caller = fn("caller");
+      memberCalls(caller, fn("map", "src/helpers.test.ts"), "map", 19);
+      const other = fn("other", "src/b.ts");
+      for (let i = 0; i < 181; i++) call(caller, other, "other", 0.95);
+
+      expect(quality().verdict).toEqual({ level: "ok", judged: true, reasons: [], advice: null, note: null });
+    });
+
     it("hub list is capped and ordered", () => {
       const caller = fn("caller");
       for (let i = 0; i < 12; i++) {
