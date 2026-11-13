@@ -107,9 +107,10 @@ export const UNIVERSAL_ASSERTIONS: Assertion[] = [
     scope: "universal",
     direction: "higher_is_better",
   },
-  // Graph quality (decision D-kn9w). All three read computeGraphQuality, the
+  // Graph quality (decision D-kn9w). All four read computeGraphQuality, the
   // computation behind the product's quality report, and are the gate
-  // "Cortex and Mesh must not regress from today" is checked against.
+  // "Cortex and Mesh must not regress from today" is checked against. Each
+  // measures nothing (null) on a graph the computation does not judge.
   {
     fix_id: "universal",
     name: "guess_share",
@@ -126,6 +127,16 @@ export const UNIVERSAL_ASSERTIONS: Assertion[] = [
     description:
       "percentage of CALLS edges that are member calls into a suspect hub — a free function reached through 10+ distinct receivers, i.e. a built-in method bound by name",
     query: { kind: "graph_quality", field: "hub_share_pct" },
+    baseline_expected: "pass",
+    scope: "universal",
+    direction: "lower_is_better",
+  },
+  {
+    fix_id: "universal",
+    name: "unscored_share",
+    description:
+      "percentage of CALLS edges with no usable confidence score — guess_share counts these in its denominator only, so an indexer that stops scoring edges would otherwise read as an improvement",
+    query: { kind: "graph_quality", field: "unscored_share_pct" },
     baseline_expected: "pass",
     scope: "universal",
     direction: "lower_is_better",

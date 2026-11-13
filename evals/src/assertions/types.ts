@@ -40,7 +40,7 @@ export type AssertionQuery =
   // One field of computeGraphQuality (src/quality/compute.ts) — the same
   // computation the product's quality report runs, so the eval and the
   // verdict users see can never disagree about what a "name guess" is.
-  | { kind: "graph_quality"; field: "guess_share_pct" | "hub_share_pct" | "level_rank" }
+  | { kind: "graph_quality"; field: "guess_share_pct" | "hub_share_pct" | "unscored_share_pct" | "level_rank" }
   | { kind: "tool_call"; tool: string; args: Record<string, unknown> };
 
 export type Predicate =

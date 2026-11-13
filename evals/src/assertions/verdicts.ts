@@ -8,7 +8,7 @@ import type { AssertionResult, Baseline, RatchetOutcome } from "./types.js";
  *  compares exactly — including `quality_level`, where any step toward
  *  `poor` is a regression.
  *
- *  The two graph-quality shares tolerate the same 0.5pp because the indexer's
+ *  The graph-quality shares tolerate the same 0.5pp because the indexer's
  *  candidate ranking is not yet proven deterministic (indexer todo T-byzx):
  *  a tie broken differently can move an edge between bands or hubs. */
 export const RATE_METRICS = new Set([
@@ -16,6 +16,7 @@ export const RATE_METRICS = new Set([
   "orphan_definition_rate",
   "guess_share",
   "suspect_hub_share",
+  "unscored_share",
 ]);
 
 /** Density is callables-per-file, not a percentage, so a fixed tolerance is

@@ -9,7 +9,7 @@
  * The definitions are the CALIBRATED ones (decision D-kn9w, measured across
  * seven repos on 2026-11-12). Change them only together with the eval
  * baselines that track them (`guess_share`, `suspect_hub_share`,
- * `quality_level` in evals/src/assertions/universal.ts).
+ * `unscored_share`, `quality_level` in evals/src/assertions/universal.ts).
  *
  * PURE: no I/O beyond the injected query. The eval harness imports this file
  * directly, so it must stay free of server dependencies.
