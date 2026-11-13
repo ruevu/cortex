@@ -214,4 +214,25 @@ describe.skipIf(BINARY_MISSING)("pr dispatcher contract", () => {
     const got = JSON.parse(getRes.content[0].text);
     expect(got.state).toBe("merged");
   });
+
+  // T-0a40 — same gap as the decision dispatcher: the all-optional superset
+  // shape never enforced any action's own required fields.
+  const MISSING: Array<[string, string, Record<string, unknown>]> = [
+    ["open", "title", { author: "rka" }],
+    ["open", "author", { title: "t" }],
+    ["touch", "pr_number", { frame_id: "f", node_name: "n", change: "added" }],
+    ["touch", "frame_id", { pr_number: 1, node_name: "n", change: "added" }],
+    ["touch", "change", { pr_number: 1, frame_id: "f", node_name: "n" }],
+    ["merge", "pr_number", {}],
+    ["get", "pr_number", {}],
+  ];
+  for (const [action, field, rest] of MISSING) {
+    it(`${action} without ${field} is refused as malformed_input`, async () => {
+      const res = await dispatch({ repo_path: repo, action, ...rest });
+      expect(res.isError).toBe(true);
+      expect(res.content[0].text).toMatch(/^ERROR reason=malformed_input/);
+      expect(res.content[0].text).toContain(`pr action '${action}'`);
+      expect(res.content[0].text).toContain(field);
+    });
+  }
 });

@@ -18,7 +18,7 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
-## [2.4.7] — 2026-11-12
+## [2.4.10] — 2026-11-13
 
 ### Fixed
 
@@ -70,6 +70,56 @@ All notable changes to Cortex are documented here. The format follows
   reference now do, with the case for it: committed vendor or minified bundles
   otherwise become thousands of nodes whose calls bind to unrelated functions
   by name.
+## [2.4.9] — 2026-11-13
+
+### Fixed
+
+- **Releases get their sidecar tarball again.** The `sidecar-tarball`
+  workflow ran on `macos-14`, an image GitHub has retired: it refused the
+  v2.4.8 job ("The configuration 'macos-14-arm64-us-default' is not
+  supported") before any step ran, so that release shipped without the
+  tarball Mesh embeds. It now runs on `macos-15`, also arm64. The v2.4.8
+  tarball was built from this branch with a manual run against the v2.4.8 tag.
+
+## [2.4.8] — 2026-11-12
+
+### Fixed
+
+- **`decision` and `pr` enforce each action's required fields.** Both tools
+  advertise one schema in which every field but `action` is optional, and
+  until now nothing else checked a call against its action's own params, so
+  `create` without `description`, `get` without `id` or `merge` without
+  `pr_number` ran with missing values. Each call is now checked against its
+  action's schema first and refused as `malformed_input` naming the field
+  (`decision action 'create': description: Required`). Well-formed calls are
+  forwarded unchanged.
+- **`decision({action:"propose"})` keeps a `description`.** It was silently
+  dropped, leaving the proposal's description empty, even though the docs said
+  propose takes "params as `create`". Propose now stores `description` as
+  given, falling back to `resolution`, and needs at least one of the two.
+  `problem` is optional. `supersede` takes `description` the same way, and
+  accepts a null `problem`/`resolution` as the tool schema always advertised.
+  A whitespace-only `description` counts as absent.
+- **`cortex decision propose` matches the MCP contract.** It takes
+  `--description`, and needs it or `--resolution` instead of always requiring
+  `--problem` and `--resolution`. It also records the branch and commit it was
+  proposed from, as every other mutating CLI command already did.
+- **`todo` docs describe the real tool.** They documented params the tool does
+  not have (`title`, `status`, `references`, `limit`/`offset`, `todo_id`,
+  `note`) and called `link`'s required `relation` optional. Every action's
+  params are now listed from its schema.
+
+### Changed
+
+- **One required-field check across `decision`, `pr`, `todo` and `show`.**
+  `todo` and `show` already refused missing fields, but through their own
+  throw-and-match path with different wording (`todo(get) requires 'id'`).
+  They now use the same per-action schema check, so every tool refuses with
+  `<tool> action '<action>': <field>: Required`.
+- **Now enforced:** `pr({action:"open"})` requires `author` and
+  `pr({action:"touch"})` requires `pr_number`, `frame_id`, `node_name` and
+  `change`, as documented. Calls that omitted them used to succeed with
+  missing values.
 
 ## [2.4.6] — 2026-11-04
 
@@ -2988,7 +3038,9 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
-[2.4.7]: https://github.com/ruevu/cortex/releases/tag/v2.4.7
+[2.4.10]: https://github.com/ruevu/cortex/releases/tag/v2.4.10
+[2.4.9]: https://github.com/ruevu/cortex/releases/tag/v2.4.9
+[2.4.8]: https://github.com/ruevu/cortex/releases/tag/v2.4.8
 [2.4.6]: https://github.com/ruevu/cortex/releases/tag/v2.4.6
 [2.4.5]: https://github.com/ruevu/cortex/releases/tag/v2.4.5
 [2.4.4]: https://github.com/ruevu/cortex/releases/tag/v2.4.4

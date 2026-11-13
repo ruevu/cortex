@@ -466,6 +466,12 @@ file paths. See
 
 **Params common to all actions:** `repo_path`, `action`.
 
+**Required fields are enforced per action.** The tool's advertised schema is a
+superset in which every field but `action` is optional; each call is then
+checked against its action's own params below, and one missing a required field
+is refused as `malformed_input` naming it (e.g. `decision action 'create':
+description: Required`).
+
 ### `action: "create"`
 Create a decision node.
 - **Params:** `title`, `description`, `rationale`,
@@ -476,15 +482,23 @@ Create a decision node.
 
 ### `action: "propose"`
 Create a decision in `status: "proposed"`.
-- **Params:** as `create`, plus `pr_number?`, `author?` (e.g.
-  `cortex:seed`), `provenance?` (machine-derived source for review).
+- **Params:** `title`, `rationale`, and **at least one of** `description` /
+  `resolution` (what was decided); `problem?`, `alternatives?`, `governs?`,
+  `references?`, `pr_number?`, `author?` (e.g. `cortex:seed`), `provenance?`
+  (machine-derived source for review).
+- **`description` vs `resolution`:** a `description` is stored as given; when
+  absent, `description` defaults to `resolution`. Send `description` alone (like
+  `create`) or the `problem`/`resolution` narrative pair (as the
+  `seed-decisions` skill does). Sending neither is `malformed_input`.
 - **Why:** for candidates that need human ratification before becoming active —
   including cold-start seeded decisions.
 
 ### `action: "supersede"`
 Atomically create a new decision that supersedes an existing one.
-- **Params:** `old_decision_id`, `title`, `problem`, `resolution`,
-  `rationale`, `alternatives?`, `governs?`, `references?`.
+- **Params:** `old_decision_id`, `title`, `problem`, `resolution` (both
+  nullable), `rationale`, `description?`, `alternatives?`, `governs?`,
+  `references?`. `description` behaves as on `propose`: stored as given,
+  defaulting to `resolution`.
 - **Why:** record a direction change without losing the history of what it
   replaced.
 
@@ -623,6 +637,12 @@ DB; the merge flow ratifies decisions in the same repo's decisions sidecar.
 
 **Params common to all actions:** `repo_path`, `action`.
 
+**Required fields are enforced per action.** The tool's advertised schema is a
+superset in which every field but `action` is optional; each call is then
+checked against its action's own params below, and one missing a required field
+is refused as `malformed_input` naming it (e.g. `pr action 'merge':
+pr_number: Required`).
+
 ### `action: "open"`
 Create a pull-request entity in the graph.
 - **Params:** `title`, `author`, plus optional `description`,
@@ -658,30 +678,37 @@ exposes the same data for the viewer via the `AdaptedTodo` contract.
 
 **Params common to all actions:** `repo_path`, `action`.
 
+**Required fields are enforced per action.** As on `decision` and `pr`, each
+call is checked against its action's own params below, and one missing a
+required field is refused as `malformed_input` naming it (e.g. `todo action
+'link': relation: Required`).
+
 ### `action: "propose"`
-Propose a new TODO entity.
-- **Params:** `title`, `description?`, `status?` (default `"open"`),
-  `governs?` (qns/paths), `references?`.
+Propose a new TODO entity (state `open`).
+- **Params:** `summary`, `description?`, `proposed_by?`, `governs?`
+  (qns/paths), `spawns_from?` (the decision/todo it came out of),
+  `blocked_by?` (todo ids), `thread?` (session id for origin provenance; empty
+  reads as absent).
 - **Returns:** the created TODO with its assigned ID.
 
 ### `action: "get"`
 Fetch a TODO by ID with resolved links.
 - **Params:** `id`.
-- **Returns:** the TODO plus linked decisions and code entities.
+- **Returns:** the TODO plus its links (`governs`, `blocked_by`, `blocks`,
+  `related_to`, `spawns_from`, `resolved_by`).
 
 ### `action: "list"`
-List TODOs, optionally filtered by status.
-- **Params:** `status?` (`open` | `in_progress` | `done` | `wont_do`),
-  `limit?` (default 25), `offset?` (default 0), `branch?`, `thread?`.
+List TODOs.
+- **Params:** `branch?`, `thread?`.
 - **`branch`/`thread`:** exact match against `origin_branch`/`origin_thread`
   (the checkout/session the TODO was *created* on). **Never matches a
   NULL-origin row**; an absent filter preserves today's unfiltered behavior.
-  Pushed straight into the repository's SQL `WHERE` clause.
+  An empty value is `malformed_input`. Pushed straight into the repository's
+  SQL `WHERE` clause.
 
 ### `action: "search"`
-Full-text search over TODO titles and descriptions.
-- **Params:** `query` (FTS5 syntax), `scope?` (qn/path to filter to linked
-  TODOs), `branch?`, `thread?`.
+Full-text search over TODO summaries and descriptions.
+- **Params:** `query` (FTS5 syntax), `branch?`, `thread?`.
 - **`branch`/`thread`:** same semantics as on `list` — exact match on
   `origin_branch`/`origin_thread`, never matches a NULL-origin row. Applied as
   a post-filter (search results are looked up in the repository to reach the
@@ -689,21 +716,24 @@ Full-text search over TODO titles and descriptions.
 
 ### `action: "update"`
 Update TODO fields.
-- **Params:** `id`, plus any of `title?`, `description?`, `status?`,
-  `governs?`, `references?`.
-- **Note:** `governs` and `references` are **full-set replacements** when
-  provided (`[]` clears all).
+- **Params:** `id`, plus any of `summary?`, `description?`, `assignee?`
+  (`null` clears), `governs?`.
+- **Note:** `governs` is a **full-set replacement** when provided (`[]` clears
+  all). State changes go through `transition`, not `update`.
 
 ### `action: "link"`
 Attach an edge from a TODO to a decision, code entity, or another TODO.
-- **Params:** `todo_id`, `target` (decision ID, qn, or file path),
-  `relation?` (`GOVERNS` | `REFERENCES` | `RELATED_TO`, default `RELATED_TO`).
+- **Params:** `id` (the TODO), `target` (decision ID, todo ID, qn, or file
+  path), `relation` (`GOVERNS` | `BLOCKED_BY` | `RELATED_TO` | `SPAWNS_FROM` |
+  `RESOLVED_BY`).
 
 ### `action: "transition"`
 Transition a TODO to a new state.
-- **Params:** `id`, `status` (`open` | `in_progress` | `done` | `wont_do`),
-  `note?`.
-- **Why:** explicit state machine transitions keep the audit trail clean.
+- **Params:** `id`, `to` (`open` | `in_progress` | `blocked` | `done` |
+  `cancelled`), `reason?`, `resolved_by?` (refs that resolved it),
+  `blocked_by?` (todo ids).
+- **Why:** explicit state machine transitions keep the audit trail clean. An
+  illegal transition is `malformed_input`.
 
 ### Provenance fields on TODOs
 
@@ -736,6 +766,10 @@ for the focus transport and
 story storage + delivery contract.
 
 **Params common to all actions:** `repo_path`, `action`.
+
+**Required fields are enforced per action.** As on `decision`, `pr` and
+`todo`, a call missing a required field is refused as `malformed_input` naming
+it (e.g. `show action 'advance': step: Required`).
 
 ### `action: "focus"`
 Hold a spotlight on `refs` in the connected viewer.
@@ -784,10 +818,10 @@ step-building (a half-built story can never dangle).
   `story_id` is a canonical `S-xxxx` id, `viewer_url` is
   `http://localhost:<port>/viewer?story=<story_id>` (port via the same
   discovery `focus` uses, falling back to `CORTEX_VIEWER_PORT` or `3333`).
-- **Errors:** missing `title`/`steps` or an empty `steps` array →
-  `malformed_input` (`"story requires at least one step"` from
-  `StoryService.create`, or the dispatcher's own `"show(story) requires
-  '<field>'"`).
+- **Errors:** a missing `title`/`steps` → `malformed_input`
+  (`"show action 'story': steps: Required"`). An empty `steps` array never
+  reaches the handler: the tool's input schema (`steps` min 1) rejects it as an
+  MCP invalid-params error.
 - **Why:** the durable counterpart to `focus` — see the
   [`show-your-work`](../skills/show-your-work/SKILL.md) skill's Stories
   section for when a story beats a run of `focus` calls, and its
