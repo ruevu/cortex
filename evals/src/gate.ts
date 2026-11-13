@@ -33,10 +33,20 @@ export type GateResult = { ok: boolean; lines: string[] };
  *    something when the baseline was captured now measures nothing. The
  *    ratchet leaves it unjudged, which is correct for a single metric and
  *    wrong for a gate: a whole extraction collapsing would otherwise pass.
- * 5. `[t] judged nothing` — no result carried a verdict, e.g. a baseline file
+ * 5. `[t] UNCOMPARABLE <name> (…)` — the baseline holds a value for the
+ *    metric, but not one the ratchet can compare (a hand-edited string, a
+ *    scalar where a map is now measured), so the metric went unjudged.
+ * 6. `[t] MISSING <name> (…)` — the baseline holds a value for a metric this
+ *    run did not produce at all: renamed, removed, or skipped. Without this a
+ *    metric could leave the gate by being renamed.
+ * 7. `[t] judged nothing` — no result carried a verdict, e.g. a baseline file
  *    with no values in it.
  *
- * Failed targets come first, then each report in the order given.
+ * A metric NEW since the baseline is not a failure: it has no baseline value,
+ * so it is unjudged until the next capture, exactly as the ratchet says.
+ *
+ * Failed targets come first, then each report in the order given; within a
+ * report, per-result lines follow result order, then MISSING, then 7.
  */
 export function strictGate(reports: TargetReport[], failed: FailedTarget[]): GateResult {
   const lines: string[] = failed.map((f) => `[${f.target}] failed: ${f.error}`);
@@ -48,21 +58,26 @@ export function strictGate(reports: TargetReport[], failed: FailedTarget[]): Gat
       continue;
     }
     const measuredBefore = r.baseline.per_assertion;
+    const ran = new Set<string>();
 
     for (const result of r.results) {
-      if (result.surprised && result.passed === false) {
-        lines.push(`[${t}] REGRESSED ${result.assertion.name}`);
-      }
-    }
-    for (const result of r.results) {
+      const name = result.assertion.name;
+      ran.add(name);
+      const inBaseline = Object.hasOwn(measuredBefore, name);
       // A per-language map's keys are file extensions, so `.status` on a map
       // can be a key (a file named `*.status`). Its value is then an outcome
       // object, never the string compared here, so a map can't match.
       const status = (result.ratchet as RatchetOutcome | undefined)?.status;
-      const name = result.assertion.name;
-      if (status === "not_measured" && Object.hasOwn(measuredBefore, name)) {
-        lines.push(`[${t}] NOT MEASURED ${name} (baseline had a value)`);
+      if (result.surprised && result.passed === false) {
+        lines.push(`[${t}] REGRESSED ${name}`);
+      } else if (status === "not_measured") {
+        if (inBaseline) lines.push(`[${t}] NOT MEASURED ${name} (baseline had a value)`);
+      } else if (result.passed === null && inBaseline) {
+        lines.push(`[${t}] UNCOMPARABLE ${name} (baseline value is not comparable)`);
       }
+    }
+    for (const name of Object.keys(measuredBefore)) {
+      if (!ran.has(name)) lines.push(`[${t}] MISSING ${name} (in the baseline, not in this run)`);
     }
     if (!r.results.some((result) => result.passed !== null)) {
       lines.push(`[${t}] judged nothing`);

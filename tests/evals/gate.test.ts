@@ -104,6 +104,32 @@ describe("strictGate", () => {
     expect(strictGate([r], [])).toEqual({ ok: true, lines: [] });
   });
 
+  it("fails when a baseline metric is missing from the run", () => {
+    // A renamed or dropped metric must not leave the gate silently.
+    const r = report("cortex", [passing("guess_share")], baseline("cortex", { guess_share: 30, hub_share: 7.7 }));
+    expect(strictGate([r], [])).toEqual({
+      ok: false,
+      lines: ["[cortex] MISSING hub_share (in the baseline, not in this run)"],
+    });
+  });
+
+  it("fails when a baseline value cannot be compared", () => {
+    // applyRatchet reads a non-number baseline value as "no baseline", which
+    // leaves the metric unjudged — e.g. a hand-edited "33.26" string.
+    const r = report("cortex", [passing("quality_level", 0), unjudged("guess_share")],
+      baseline("cortex", { quality_level: 0, guess_share: "33.26" }));
+    expect(strictGate([r], [])).toEqual({
+      ok: false,
+      lines: ["[cortex] UNCOMPARABLE guess_share (baseline value is not comparable)"],
+    });
+  });
+
+  it("a metric new since the baseline is not a failure", () => {
+    const r = report("cortex", [passing("guess_share"), unjudged("unscored_share")],
+      baseline("cortex", { guess_share: 30 }));
+    expect(strictGate([r], [])).toEqual({ ok: true, lines: [] });
+  });
+
   it("fails when nothing was judged", () => {
     const r = report("cortex", [unjudged("guess_share"), notMeasured("quality_level")], baseline("cortex", {}));
     expect(strictGate([r], [])).toEqual({ ok: false, lines: ["[cortex] judged nothing"] });
