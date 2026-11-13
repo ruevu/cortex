@@ -9,6 +9,7 @@ import { ALL_ASSERTIONS, selectAssertions } from "./assertions/registry.js";
 import { applyRatchet } from "./assertions/verdicts.js";
 import { mergeImprovements } from "./baselines.js";
 import { writeReportArtifacts, type TargetReport } from "./report.js";
+import { strictGate, type FailedTarget } from "./gate.js";
 import type {
   Targets,
   Target,
@@ -23,6 +24,9 @@ type Args = {
   suite?: string;
   determinism?: boolean;
   acceptImprovements?: boolean;
+  /** Exit non-zero when the run regressed or could not be judged — see
+   *  strictGate. Without it the eval only reports, and always exits 0. */
+  strict?: boolean;
 };
 
 function parseArgs(argv: string[]): Args {
@@ -34,6 +38,7 @@ function parseArgs(argv: string[]): Args {
     else if (a.startsWith("--suite=")) args.suite = a.slice("--suite=".length);
     else if (a === "--determinism") args.determinism = true;
     else if (a === "--accept-improvements") args.acceptImprovements = true;
+    else if (a === "--strict") args.strict = true;
   }
   return args;
 }
@@ -181,11 +186,16 @@ function main(): void {
   }
 
   const reports: TargetReport[] = [];
+  const failed: FailedTarget[] = [];
   for (const t of selected) {
     try {
       reports.push(runTarget(t, args.path, { determinism: args.determinism }));
     } catch (e) {
-      console.error(`[${t.name}] failed:`, e instanceof Error ? e.message : e);
+      const message = e instanceof Error ? e.message : String(e);
+      console.error(`[${t.name}] failed:`, message);
+      // The full message is printed above; the gate line keeps its first line
+      // (execFileSync errors carry the whole command and stderr after it).
+      failed.push({ target: t.name, error: message.split("\n")[0] ?? message });
     }
   }
 
@@ -212,6 +222,20 @@ function main(): void {
   const reportsDir = resolve("evals/reports", stamp);
   const { summaryPath } = writeReportArtifacts(reportsDir, reports);
   console.log(`Eval complete. Summary: ${summaryPath}`);
+
+  // After the artifacts, never before: a failing gate still leaves the
+  // report that explains it. exitCode rather than process.exit(), so
+  // nothing pending is cut off.
+  if (args.strict) {
+    const gate = strictGate(reports, failed);
+    if (gate.ok) {
+      console.log("strict gate: PASS");
+    } else {
+      console.error("strict gate: FAIL");
+      for (const line of gate.lines) console.error(`  ${line}`);
+      process.exitCode = 1;
+    }
+  }
 }
 
 const isDirect = import.meta.url === `file://${process.argv[1]}` ||
