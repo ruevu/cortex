@@ -156,8 +156,11 @@ function judge(
     reasons.push(`${pct(calls.name_guess, calls.total)} of call edges are name guesses`);
   }
   if (hub_share >= DEGRADED_HUB_SHARE) {
-    const names = hubs.slice(0, HUB_NAMES_IN_REASON).map((h) => h.name).join(", ");
-    const more = hubs.length > HUB_NAMES_IN_REASON ? ", …" : "";
+    // Distinct names, largest hub first: two files' `push` hubs are one
+    // function name to the reader, and "(push, push, has)" reads as a typo.
+    const distinct = [...new Set(hubs.map((h) => h.name))];
+    const names = distinct.slice(0, HUB_NAMES_IN_REASON).join(", ");
+    const more = distinct.length > HUB_NAMES_IN_REASON ? ", …" : "";
     reasons.push(`${pct(calls.hub_edges, calls.total)} of call edges run through suspect hubs (${names}${more})`);
   }
   return { level, judged: true, reasons, advice: QUALITY_ADVICE, note: null };

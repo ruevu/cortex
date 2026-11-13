@@ -200,6 +200,26 @@ describe("computeGraphQuality", () => {
         "93.0% of call edges run through suspect hubs (h11, h10, h09, …)",
       ]);
     });
+
+    it("a hub name shared by two files is named once in the reason", () => {
+      // Seen on a real graph: two `push` hubs in different files read as
+      // "(push, has, push, …)". The reason names functions, not nodes.
+      const caller = fn("caller");
+      memberCalls(caller, fn("push", "src/a/stack.ts"), "push", 30);
+      memberCalls(caller, fn("push", "src/b/list.ts"), "push", 20);
+      memberCalls(caller, fn("has", "src/c.ts"), "has", 15);
+      memberCalls(caller, fn("find", "src/d.ts"), "find", 12);
+      memberCalls(caller, fn("map", "src/e.ts"), "map", 11);
+      const other = fn("other", "src/b.ts");
+      for (let i = 0; i < 112; i++) call(caller, other, "other", 0.95);
+
+      const q = quality();
+      expect(q.hub_count).toBe(5);
+      expect(q.verdict.reasons).toEqual([
+        "44.0% of call edges are name guesses",
+        "44.0% of call edges run through suspect hubs (push, has, find, …)",
+      ]);
+    });
   });
 
   it("pct floors from integer counts", () => {
