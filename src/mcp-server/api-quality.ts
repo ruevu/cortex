@@ -19,6 +19,8 @@ import { QualityReportWireSchema, type QualityReportWire } from "./api-schemas.j
  * report" instead of an invalid body (a 500 under the strict posture). And
  * parsing drops the file-level `version` and `repo_path`, which describe the
  * file, not the graph.
+ *
+ * See docs/architecture/graph-quality.md and docs/api/README.md (decision D-3t5z).
  */
 export function httpQualityFor(
   project: string | null,

@@ -155,12 +155,13 @@ checks and none of the ecosystem-specific ones; `suites` defaults to `["nuxt"]`.
 Selection lives in `selectAssertions` (registry) and `selectTargets` (cli).
 
     npm run eval                     # default suite (`nuxt`), unchanged
-    npm run eval -- --suite=corpus   # the 17-repo multi-language corpus
+    npm run eval -- --suite=corpus   # the multi-language corpus: 18 targets (nuxt-ui is in both suites)
     npm run eval -- --suite=all
+    npm run eval:gate                # the self suite under --strict; see Gating below
 
 ## The universal metrics
 
-Six, in `evals/src/assertions/universal.ts`:
+Ten: nine in `evals/src/assertions/universal.ts`, plus the `--determinism` check.
 
 | metric | direction | what a bad number means |
 |---|---|---|
@@ -169,7 +170,16 @@ Six, in `evals/src/assertions/universal.ts`:
 | `qn_collisions` | lower | two source files folding to one identity |
 | `orphan_definition_rate` | lower | definitions extracted with no edges at all |
 | `per_language_function_density` | higher | callables per file, **per language** — catches one language falling out of extraction while the repo-wide averages stay respectable |
+| `guess_share` | lower | the percentage of call edges that are name guesses, suspect-hub edges included ([graph-quality.md](graph-quality.md)) |
+| `suspect_hub_share` | lower | the percentage of call edges that are member calls into a suspect hub: a repo function that built-in methods bind to by name |
+| `unscored_share` | lower | the percentage of call edges with no confidence score. It guards `guess_share`: losing scores would lower the guess share and read as a gain |
+| `quality_level` | lower | the graph-quality verdict as 0 `ok` / 1 `degraded` / 2 `poor`, compared exactly |
 | determinism (`--determinism`) | — | indexing the same tree twice yields a different graph |
+
+The four quality metrics are `null` (not measured) whenever the verdict is not
+judged, meaning fewer than 200 call edges or more than half of them unscored.
+A share over an unjudgeable graph is noise, and a noisy low share would
+otherwise ratchet in as an improvement.
 
 ### "Nothing to measure" is not zero
 
@@ -191,8 +201,10 @@ exit code come to disagree.
 
 Epsilon is per-metric-kind:
 
-- **percentage metrics** — 0.5 percentage points.
-- **counts** — exact.
+- **percentage metrics** — 0.5 percentage points (`call_attribution_rate`,
+  `orphan_definition_rate` and the three quality shares, the members of
+  `RATE_METRICS` in `verdicts.ts`).
+- **counts**, and the `quality_level` ordinal — exact.
 - **per-language density** — **proportional: 10% of that language's own
   baseline.** Density is callables-per-file, typically near 1, so a fixed 0.5
   would let a language lose most of its extraction — or vanish from the repo
@@ -222,17 +234,74 @@ deliberate so that the resulting git diff is the review record — a metric can
 rise for bad reasons, since counting garbage raises a count as surely as fixing
 extraction does.
 
+## Gating
+
+`--strict` turns a run into a pass/fail gate. It exits 1, with one line per
+problem naming the target and metric, when a selected target:
+
+- **failed**: its clone, index or run threw;
+- has **no baseline**, so capture one first
+  (`npm run eval -- --capture-baseline=<target>`), and the other checks are
+  skipped;
+- has a metric that **REGRESSED** beyond its tolerance;
+- has a metric **NOT MEASURED** this run that the baseline has a value for, for
+  example a graph that became too small or too unscored to judge;
+- has a metric **UNCOMPARABLE** with its baseline value;
+- has a baseline metric **MISSING** from the run, i.e. renamed or dropped;
+- **judged nothing** at all.
+
+A metric that is new since the baseline is not a failure. `strictGate`
+(`evals/src/gate.ts`) reads the outcomes `applyRatchet` stored and never
+re-decides a verdict, the same single-decider rule as the report.
+`--determinism` runs outside the gate: `--strict` does not check it.
+
+### The self suite
+
+`npm run eval:gate` is `--suite=self --strict`. It is the no-regression gate
+for graph quality (decision `D-kn9w`, [graph-quality.md](graph-quality.md)):
+run it before any release that bumps the indexer pin, changes a quality
+definition, or could otherwise move call edges. Its targets:
+
+- **`cortex`**, a public target in `evals/targets.json` pinned at a SHA, so its
+  baseline describes a fixed tree and only the indexer or the definitions can
+  move it;
+- **private targets** from `evals/targets.private.json`. That file is
+  gitignored and has the same shape as a public entry (a `file://` `repo_url`
+  works for a local repo), and their baselines live in the gitignored
+  `evals/baselines/private/`. A run without the file says so on stderr, and a
+  target name may appear in only one of the two files.
+
+### The graph cache knows which indexer built it
+
+A target's cached graph (`evals/cache/<target>/graph.db`) is reused only when
+it is at least as new as the workdir's `.git/HEAD` **and** was built by the
+current indexer. `evals/cache/<target>/indexer-identity` records the binary
+`resolveIndexerBinary()` returns (which honours `CORTEX_INDEXER_PATH`) as its
+realpath, size and mtime. The stamp is removed before a rebuild and written
+only after the indexer exits 0, so a failed build never passes for a good one.
+
+Every rebuild deletes `graph.db` and its `-wal`/`-shm` first. cortex-indexer is
+incremental: it keeps per-file hashes inside the graph and does nothing over an
+unchanged tree. Without the delete, a new indexer would be graded on the old
+indexer's graph.
+
 ## Gotchas
 
 - **`evals/cache/` holds whole third-party repositories.** They carry their own
   test suites; `vitest.config.ts` excludes the directory, or `npm test` picks up
   hundreds of foreign tests that fail for want of their own dependencies.
+- **…and `cortex index` indexes them.** `evals/cache/` is gitignored, but
+  cortex-indexer does not honour that rule. A checkout that has run the eval
+  therefore indexes every clone into its own graph, and its answers and quality
+  verdict describe them too. Remove `evals/cache/` and `evals/reports/` and
+  reindex (todo `T-a9kr`).
 - **`evals/` is not typechecked by `npm test`.** The root `tsconfig.json`
   includes only `src`, and vitest transpiles without typechecking. The gate is
   `npx tsc --noEmit -p evals/tsconfig.json 2>&1 | grep -v '^src/viewer/'`, which
   must print nothing (the filtered errors are pre-existing vite-built viewer
   sources that the eval config drags in by overriding the root `exclude`).
 - **A forced reindex must really be forced.** `maybeReindex` skips indexing when
-  the cached graph is newer than the workdir's `.git/HEAD`. The determinism
-  check deletes the graph DB precisely to defeat that; without it the second
-  pass re-scores the first pass's graph and the check can never fail.
+  the cached graph is at least as new as the workdir's `.git/HEAD` and was built
+  by the current indexer. The determinism check deletes the graph DB precisely
+  to defeat that; without it the second pass re-scores the first pass's graph
+  and the check can never fail.

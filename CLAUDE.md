@@ -147,6 +147,21 @@ backfilled.
 Gate: `CORTEX_STALENESS=0`. Details:
 [staleness-detection.md](docs/architecture/staleness-detection.md).
 
+### Graph-quality signal — how much of the call graph is a guess
+
+Every index labels each call edge `resolved`, `likely`, `name guess` or
+`unscored`, finds **suspect hubs** (repo functions that built-in methods bind
+to by name), and judges the graph `ok`, `degraded` or `poor` in
+`.cortex/quality.json`. It is silent when `ok`. Otherwise you see a `⚠ graph
+quality` block in the index output and a `⚠ cortex quality` line at
+SessionStart; on demand, run `cortex quality [--json]`.
+
+A `degraded`/`poor` verdict means **treat callers/callees as hints and confirm
+with `search_code`**. It does **not** mean reindex, because the same tree
+yields the same graph. Gate: `CORTEX_QUALITY=0`. Release gate:
+`npm run eval:gate`. Details:
+[graph-quality.md](docs/architecture/graph-quality.md).
+
 ### Architecture hotspots — ranked-by-risk modules
 
 `get_architecture(aspects=["hotspots"])` returns `{ project, hotspots:

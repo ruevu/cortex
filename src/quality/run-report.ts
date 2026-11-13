@@ -33,6 +33,8 @@ import type { QualityReport } from "./types.js";
  * NEVER THROWS, and never leaves a stale report: any failure removes the
  * previous report, because a verdict on an older graph is worse than none.
  * A quality report is metadata about an index, not the index.
+ *
+ * See docs/architecture/graph-quality.md (ordering contract: decision D-3t5z).
  */
 export function runQualityReport(
   repoPath: string,

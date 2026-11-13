@@ -20,6 +20,8 @@ import { brand } from "../prog.js";
  *
  * Anchored to the CHECKOUT root, matching where the index wrote the report:
  * a linked worktree reads its own, never the main checkout's.
+ *
+ * See docs/architecture/graph-quality.md.
  */
 export function runQualityCommand(
   flags: Record<string, string | boolean>,

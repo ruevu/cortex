@@ -9,6 +9,8 @@ import type { QualityReport } from "./types.js";
  * the report describes the graph built for this tree, and `.cortex/` is
  * gitignored and disposable. Never the canonical root — a linked worktree
  * has its own graph, so it must have its own report.
+ *
+ * See docs/architecture/graph-quality.md.
  */
 export function qualityReportPath(repoPath: string): string {
   return join(repoPath, ".cortex", "quality.json");

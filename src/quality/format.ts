@@ -24,6 +24,8 @@ const MAX_REASONS = 2;
  *
  * The last line names a command, so it goes through `brand()`: under Mesh it
  * reads `mesh ctx quality`.
+ *
+ * Every surface's wording is listed in docs/architecture/graph-quality.md.
  */
 export function formatQualityIndexLines(q: GraphQuality): string | null {
   const { level, reasons, advice } = q.verdict;
