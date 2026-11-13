@@ -47,6 +47,7 @@ describe("brand", () => {
     expect(brand("  cortex <namespace> <command>")).toBe("  mesh ctx <namespace> <command>");
     expect(brand("'cortex setup frames'")).toBe("'mesh ctx setup frames'");
     expect(brand("cortex source-drift")).toBe("mesh ctx source-drift");
+    expect(brand("details: cortex quality")).toBe("details: mesh ctx quality");
   });
 
   it("leaves the product name in prose alone", () => {
