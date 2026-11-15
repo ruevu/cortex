@@ -215,16 +215,18 @@ edges:
   Between them they hold 106 edges (2.4 points), because built-in `Array.find`
   and `String.endsWith` calls bind to them by name.
 
-Each is the shape the hub rule exists to catch, so the next helper named after
-a built-in method will trip the gate.
+Each is the shape the hub rule exists to catch. The next helper named after a
+built-in method therefore turns cortex's own live verdict `degraded`. The gate
+grades the pinned tree, so it trips only once the pin moves past that helper.
 
 ## Not here yet
 
-- **Per-answer labels and footers.** Grouping `trace_path`/`context_pack` rows
-  under `resolved` / `likely` / `name guess`, plus a once-per-session `⚠`
-  footer when the verdict is `poor`, ship together with contract fixtures so
-  that Mesh's graph cards keep rendering Cortex output (`D-w4eg`, todo
-  `T-aayg`).
+- **Per-answer labels.** Grouping `trace_path`/`context_pack` rows under
+  `resolved` / `likely` / `name guess` (`D-w4eg`) is a later phase. It needs
+  contract fixtures, so that Mesh's graph cards keep rendering Cortex output.
+  The once-per-session `⚠` footer for a `poor` verdict was considered and
+  cancelled (todo `T-aayg`): it attaches a repo-wide verdict to whichever
+  answer comes first, and repeats what the SessionStart line already says.
 - **Exclusions.** The report has no coverage section yet. Vendored and bundled
   code is excluded by default, and the choices recorded in `cortex.json`, in a
   later phase (`D-ykv9`).
