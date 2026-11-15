@@ -4,6 +4,7 @@ import { GraphStore } from "../../src/graph/store.js";
 import {
   GraphResponseSchema, ProjectsResponseSchema, FramesResponseSchema,
   FileEdgesResponseSchema, AggregatesResponseSchema, FreshnessResponseSchema, HealthResponseSchema,
+  QualityResponseSchema,
 } from "../../src/mcp-server/api-schemas.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -26,6 +27,7 @@ afterAll(() => {
 const CASES: [string, { safeParse: (d: unknown) => { success: boolean } }][] = [
   ["/api/health", HealthResponseSchema],
   ["/api/freshness", FreshnessResponseSchema],
+  ["/api/quality", QualityResponseSchema],
   ["/api/projects", ProjectsResponseSchema],
   ["/api/graph", GraphResponseSchema],
   ["/api/frames", FramesResponseSchema],

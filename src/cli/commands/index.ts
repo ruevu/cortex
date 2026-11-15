@@ -16,6 +16,7 @@ import { readIndexStatus, renderIndexStatus } from "../../db/index-status.js";
 import { Registry } from "../../db/registry.js";
 import { captureIndexMeta } from "../../graph/capture-index-meta.js";
 import { runStalenessSweep } from "../../staleness/run-sweep.js";
+import { runQualityReport } from "../../quality/run-report.js";
 import type { IndexMode } from "../../db/cache.js";
 import { stagingDbPath, cleanupStagingDb } from "../../db/staging-path.js";
 import { publishStagedDb } from "../../db/swap-graph-db.js";
@@ -147,6 +148,9 @@ export async function runIndexCommand(cmd: IndexCommand, ctx: ProjectContext): P
         const staleness = runStalenessSweep(repoPath, dbPath);
         if (staleness) process.stdout.write(staleness + "\n");
 
+        // before captureIndexMeta: /api/quality's ETag is the index baseline — see run-report.ts
+        const quality = runQualityReport(repoPath, dbPath);
+        if (quality) process.stdout.write(quality + "\n");
         captureIndexMeta(dbPath, repoPath); // freshness baseline on the canonical path
 
         // Register in the master registry (best-effort; never fail the index).

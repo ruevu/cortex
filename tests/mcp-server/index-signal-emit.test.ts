@@ -1,8 +1,13 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, realpathSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
+import Database from "better-sqlite3";
+import { resolveCortexDbPath } from "../../src/db/resolve-path.js";
+import { readIndexMeta } from "../../src/graph/index-meta.js";
+import { Registry } from "../../src/db/registry.js";
+import { qualityReportPath } from "../../src/quality/report-store.js";
 import { setIndexSignalEmitter } from "../../src/index-signal.js";
 import type { IndexSignalMsg } from "../../src/events/types.js";
 import { indexRepositoryForTest } from "../../src/mcp-server/tools/code-tools.js";
@@ -39,6 +44,42 @@ describe("index_repository emits lifecycle signals", () => {
     expect(seen.map((s) => s.phase)).toEqual(["started", "completed"]);
     expect(seen[0].repo_path).toBe(repo);
     expect(seen[1].stats?.elapsed_ms).toBeGreaterThanOrEqual(0);
+  }, 120_000);
+
+  it("completes only once the index's quality report, freshness baseline and registry entry exist", async () => {
+    // A consumer that refreshes on `completed` (Mesh does) reads whatever is
+    // there at that moment. Each check is one such read: the report
+    // /api/quality serves, the baseline that /api/freshness and the ETag come
+    // from, and the registry entry /api/projects lists after a first index.
+    const repo = makeTempRepo();
+    const regDir = realpathSync(mkdtempSync(join(tmpdir(), "cortex-idx-signal-reg-")));
+    temps.push(regDir);
+    const savedRegistry = process.env.CORTEX_REGISTRY_DB;
+    process.env.CORTEX_REGISTRY_DB = join(regDir, "registry.db");
+    let atCompleted: { report: boolean; baseline: boolean; registered: boolean } | null = null;
+    setIndexSignalEmitter((m) => {
+      if (m.phase !== "completed") return;
+      const db = new Database(resolveCortexDbPath(repo), { readonly: true });
+      const reg = new Registry();
+      try {
+        atCompleted = {
+          report: existsSync(qualityReportPath(repo)),
+          baseline: readIndexMeta(db) !== null,
+          registered: reg.list().some((r) => r.root_path === repo),
+        };
+      } finally {
+        db.close();
+        reg.close();
+      }
+    });
+    try {
+      await indexRepositoryForTest({ repo_path: repo });
+    } finally {
+      if (savedRegistry === undefined) delete process.env.CORTEX_REGISTRY_DB;
+      else process.env.CORTEX_REGISTRY_DB = savedRegistry;
+    }
+
+    expect(atCompleted).toEqual({ report: true, baseline: true, registered: true });
   }, 120_000);
 
   it("emits failed when the index throws, and still rethrows", async () => {

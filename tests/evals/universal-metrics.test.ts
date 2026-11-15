@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GraphStore } from "../../src/graph/store.js";
 import { runAssertion } from "../../evals/src/assertions/runner.js";
-import { RATE_METRICS } from "../../evals/src/assertions/verdicts.js";
+import { RATE_METRICS, applyRatchet } from "../../evals/src/assertions/verdicts.js";
 import { UNIVERSAL_ASSERTIONS } from "../../evals/src/assertions/universal.js";
+import type { AssertionResult, Baseline } from "../../evals/src/assertions/types.js";
 
 function metric(name: string) {
   const a = UNIVERSAL_ASSERTIONS.find((x) => x.name === name);
@@ -152,6 +153,95 @@ describe("universal metrics", () => {
 
     const r = runAssertion(metric("per_language_function_density"), { dbPath });
     expect(r.observed).toEqual({ rs: 1 });
+  });
+
+  describe("graph quality metrics", () => {
+    /** A CALLS edge carrying the indexer's resolution data. */
+    function scoredCall(src: { id: string }, tgt: { id: string }, confidence: number) {
+      store.createEdge({
+        source_id: src.id, target_id: tgt.id, relation: "CALLS",
+        data: { callee: "target", strategy: "unique_name", confidence },
+      });
+    }
+
+    /** `resolved` 0.95 edges, `guess` 0.30 edges and `unscored` edges with no
+     *  confidence, all between one caller and one target. */
+    function seedCalls(counts: { resolved?: number; guess?: number; unscored?: number }) {
+      const src = store.createNode({ kind: "function", name: "caller", qualified_name: "p.a.caller", file_path: "a.ts" });
+      const tgt = store.createNode({ kind: "function", name: "target", qualified_name: "p.b.target", file_path: "b.ts" });
+      for (let i = 0; i < (counts.resolved ?? 0); i++) scoredCall(src, tgt, 0.95);
+      for (let i = 0; i < (counts.guess ?? 0); i++) scoredCall(src, tgt, 0.3);
+      for (let i = 0; i < (counts.unscored ?? 0); i++) {
+        store.createEdge({ source_id: src.id, target_id: tgt.id, relation: "CALLS", data: { callee: "target" } });
+      }
+    }
+
+    const QUALITY_METRICS = ["guess_share", "suspect_hub_share", "unscored_share", "quality_level"];
+
+    function judged(name: string, observed: number, perAssertion: Record<string, number>): boolean | null {
+      const result: AssertionResult = { assertion: metric(name), observed, passed: null, surprised: false };
+      const baseline: Baseline = {
+        target: "t", captured_at: "2026-11-13T00:00:00.000Z",
+        nodes_by_label: {}, edges_by_type: {}, per_assertion: perAssertion,
+      };
+      return applyRatchet([result], baseline)[0]!.passed;
+    }
+
+    it("graph_quality metrics read the shared computation", () => {
+      // 200 edges, 20% unscored: judged. 80 guesses of 200 is 40% → degraded.
+      seedCalls({ resolved: 80, guess: 80, unscored: 40 });
+
+      expect(runAssertion(metric("guess_share"), { dbPath }).observed).toBeCloseTo(40, 10);
+      expect(runAssertion(metric("suspect_hub_share"), { dbPath }).observed).toBe(0);
+      expect(runAssertion(metric("unscored_share"), { dbPath }).observed).toBeCloseTo(20, 10);
+      expect(runAssertion(metric("quality_level"), { dbPath }).observed).toBe(1);
+    });
+
+    it("quality metrics measure nothing on an empty graph", () => {
+      for (const name of QUALITY_METRICS) {
+        expect(runAssertion(metric(name), { dbPath }).observed, name).toBeNull();
+      }
+    });
+
+    // The quality computation reports an unjudged graph as level ok — right
+    // for a user, who gets no verdict, and wrong for a ratchet, where ok is
+    // the best score. A graph that can no longer be judged must read as not
+    // measured, so a baseline that judged it trips NOT MEASURED in the gate.
+    it("too few call edges measure nothing, rather than reading as ok", () => {
+      seedCalls({ resolved: 1, guess: 1 });
+      for (const name of QUALITY_METRICS) {
+        expect(runAssertion(metric(name), { dbPath }).observed, name).toBeNull();
+      }
+    });
+
+    it("a mostly unscored graph measures nothing, rather than reading as ok", () => {
+      seedCalls({ guess: 99, unscored: 101 });
+      for (const name of QUALITY_METRICS) {
+        expect(runAssertion(metric(name), { dbPath }).observed, name).toBeNull();
+      }
+    });
+
+    it("losing confidence scores is a regression, not an improvement", () => {
+      // Unscored edges sit in guess_share's denominator only, so stripping
+      // scores LOWERS it. unscored_share is what catches that.
+      expect(judged("unscored_share", 20, { unscored_share: 0.14 })).toBe(false);
+      expect(judged("unscored_share", 0.6, { unscored_share: 0.14 })).toBe(true);
+    });
+
+    it("suspect_hub_share tolerates half a point", () => {
+      expect(judged("suspect_hub_share", 10.4, { suspect_hub_share: 9.93 })).toBe(true);
+      expect(judged("suspect_hub_share", 10.5, { suspect_hub_share: 9.93 })).toBe(false);
+    });
+
+    it("quality_level regresses on any worsening", () => {
+      expect(judged("quality_level", 1, { quality_level: 0 })).toBe(false);
+      expect(judged("quality_level", 0, { quality_level: 0 })).toBe(true);
+    });
+
+    it("guess_share tolerates half a point", () => {
+      expect(judged("guess_share", 32.0, { guess_share: 31.6 })).toBe(true);
+      expect(judged("guess_share", 32.2, { guess_share: 31.6 })).toBe(false);
+    });
   });
 
   it("every RATE_METRICS name is a real universal assertion", () => {

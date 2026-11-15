@@ -280,6 +280,16 @@ EOF
                 printf '%s\n' "$STALENESS"
             fi
         fi
+        # Graph quality (Layer 2): one line when the last index judged this graph
+        # degraded or poor; silent when ok, with no report, or with CORTEX_QUALITY=0.
+        # It reads the report the index wrote and never computes one. Degrade-safe:
+        # an older CLI without `quality` fails to stderr and prints no line.
+        if [ -n "$CORTEX_BIN" ]; then
+            QUALITY="$(cd "$REPO" && "$CORTEX_BIN" quality --headline 2>/dev/null)"
+            if [ -n "$QUALITY" ]; then
+                printf '%s\n' "$QUALITY"
+            fi
+        fi
         # Source drift (checkout <-> base ref) — the OTHER staleness axis. The
         # freshness line answers "is the index current for this HEAD?"; this
         # answers "is this HEAD current for its base?". A worktree resumed after

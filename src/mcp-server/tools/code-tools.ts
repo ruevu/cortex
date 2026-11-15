@@ -40,6 +40,7 @@ import { Registry } from "../../db/registry.js";
 import { readIndexStatus, renderIndexStatus } from "../../db/index-status.js";
 import { captureIndexMeta } from "../../graph/capture-index-meta.js";
 import { runStalenessSweep } from "../../staleness/run-sweep.js";
+import { runQualityReport } from "../../quality/run-report.js";
 import { invalidateFreshness } from "../freshness.js";
 import { stagingDbPath, cleanupStagingDb } from "../../db/staging-path.js";
 import { publishStagedDb } from "../../db/swap-graph-db.js";
@@ -258,19 +259,27 @@ async function invokeIndexer(
   }
 }
 
+/** What an index run's `completed` signal reports. */
+type IndexStats = { nodes?: number; edges?: number; frames?: number };
+
 /** Run frame extraction + contract extraction against the STAGING DB, then
  *  publish the staged DB atomically to the canonical live path.
  *
  *  All passes target `stagePath` so no partial write ever touches `liveDbPath`
  *  mid-run. `publishStagedDb` is the single chokepoint that promotes the
- *  finished artifact into place. */
+ *  finished artifact into place.
+ *
+ *  It returns the run's stats instead of signalling `completed`: the publish
+ *  is not the end of an index. The caller emits `completed` last, once the
+ *  sweep, the quality report, the freshness baseline and the registry entry
+ *  exist, because a consumer that refreshes on the signal reads them all at
+ *  that moment (decision D-3t5z). */
 async function withFrames(
   baseText: string,
   repoPath: string,
   stagePath: string,
   liveDbPath: string,
-  signal?: { completed(stats?: { nodes?: number; edges?: number; frames?: number }): void },
-): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+): Promise<{ out: { content: Array<{ type: "text"; text: string }> }; stats: IndexStats }> {
   const project = deriveProjectName(repoPath);
   let frames: FrameResult;
   try {
@@ -289,11 +298,10 @@ async function withFrames(
     const parsed = JSON.parse(baseText) as { nodes?: number; edges?: number };
     if (typeof parsed?.nodes === "number") counts = { nodes: parsed.nodes, edges: parsed.edges };
   } catch { /* prose baseText — no counts, which is the honest answer */ }
-  signal?.completed({
-    ...counts,
-    frames: frames.status === "ok" ? frames.framesAssigned : undefined,
-  });
-  return { content: [{ type: "text", text: `${baseText}\nframes: ${JSON.stringify(frames)}\ncontracts: ${JSON.stringify(contracts)}` }] };
+  return {
+    out: { content: [{ type: "text", text: `${baseText}\nframes: ${JSON.stringify(frames)}\ncontracts: ${JSON.stringify(contracts)}` }] },
+    stats: { ...counts, frames: frames.status === "ok" ? frames.framesAssigned : undefined },
+  };
 }
 
 type IndexRepositoryArgs = z.infer<typeof indexRepositorySchema>;
@@ -309,10 +317,11 @@ export async function indexRepositoryForTest(args: IndexRepositoryArgs) {
   // Announce the run before any work: the canvas waiting on this repo flips
   // out of its "nothing here yet" state the moment the index starts, not when
   // its next poll happens to land. The terminal phase is emitted by the body —
-  // completed from the publish chokepoint, failed from the indexer's own error
-  // envelope — with this catch covering everything that throws instead
-  // (an unwritable repo_path, a lock failure, a failed publish). Without it a
-  // canvas would wait on a `started` that never terminates.
+  // completed as the last step, once everything the index produces is
+  // readable; failed from the indexer's own error envelope — with this catch
+  // covering everything that throws instead (an unwritable repo_path, a lock
+  // failure, a failed publish or post-publish step). Without it a canvas would
+  // wait on a `started` that never terminates.
   const signal = beginIndexSignal({
     repo_path: repoPath,
     project: deriveProjectName(repoPath),
@@ -410,11 +419,15 @@ async function runIndexRepository(
         servedFromCache = readCacheEntry(cacheKey, stagePath, repoPath);
       }
       if (servedFromCache && cacheKey) {
-        const out = await withFrames(`imported from cache key ${cacheKey.slice(0, 12)}…`, repoPath, stagePath, dbPath, signal);
+        const { out, stats } = await withFrames(`imported from cache key ${cacheKey.slice(0, 12)}…`, repoPath, stagePath, dbPath);
         runStalenessSweep(repoPath, dbPath); // before captureIndexMeta — see run-sweep.ts
+        // before captureIndexMeta: /api/quality's ETag is the index baseline — see run-report.ts
+        const quality = runQualityReport(repoPath, dbPath);
+        if (quality && out.content[0]) out.content[0].text += "\n" + quality;
         captureIndexMeta(dbPath, repoPath);
         invalidateFreshness(repoPath);
         registerRepo();
+        signal.completed(stats); // last: everything above is readable now — see withFrames
         return out;
       }
 
@@ -447,11 +460,15 @@ async function runIndexRepository(
         return result;
       }
       const baseText = result.content?.[0]?.text ?? "indexed";
-      const out = await withFrames(baseText, repoPath, stagePath, dbPath, signal);
+      const { out, stats } = await withFrames(baseText, repoPath, stagePath, dbPath);
       runStalenessSweep(repoPath, dbPath); // before captureIndexMeta — see run-sweep.ts
+      // before captureIndexMeta: /api/quality's ETag is the index baseline — see run-report.ts
+      const quality = runQualityReport(repoPath, dbPath);
+      if (quality && out.content[0]) out.content[0].text += "\n" + quality;
       captureIndexMeta(dbPath, repoPath);
       invalidateFreshness(repoPath);
       registerRepo();
+      signal.completed(stats); // last: everything above is readable now — see withFrames
       return out;
     } finally {
       cleanupStagingDb(stagePath); // never leak staging — even on indexer error / throw

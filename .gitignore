@@ -17,9 +17,16 @@ scripts/frame-extraction/python/.venv/
 # macOS Finder metadata — never useful in the repo
 .DS_Store
 
-# Eval harness output and cache
+# Eval harness scratch: target clones, their graphs and run reports
+# (evals/src/paths.ts). Private targets and their baselines live outside
+# every working tree, in ~/.cortex/<repoId>/evals/.
+/evals/.cache/
+# Where those lived before 2.4.11. Kept ignored so an old checkout's copies,
+# private ones included, can never be committed. Delete them.
 /evals/reports/
 /evals/cache/
+/evals/targets.private.json
+/evals/baselines/private/
 
 # Native worktree tool location
 .claude/worktrees/

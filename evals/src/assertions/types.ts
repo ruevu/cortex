@@ -9,6 +9,12 @@ export type Target = {
   packs?: AssertionScope[];
   /** Suite membership for --suite selection. Defaults to ["nuxt"]. */
   suites?: string[];
+  /** True for a target read from the repository's private targets file,
+   *  `~/.cortex/<repoId>/evals/targets.private.json`. Set by the loader only
+   *  (target-config.ts), never written in a targets file: it routes the
+   *  target's baseline to that directory's `baselines/`, outside every
+   *  working tree. */
+  private?: boolean;
 };
 
 export type Targets = { targets: Target[] };
@@ -37,6 +43,10 @@ export type AssertionQuery =
   | { kind: "count_label"; label: string }                // nodes WHERE kind = ?
   | { kind: "count_edge"; type: string }                  // edges WHERE relation = ?
   | { kind: "language_density" }                          // NEW — one value per file extension
+  // One field of computeGraphQuality (src/quality/compute.ts) — the same
+  // computation the product's quality report runs, so the eval and the
+  // verdict users see can never disagree about what a "name guess" is.
+  | { kind: "graph_quality"; field: "guess_share_pct" | "hub_share_pct" | "unscored_share_pct" | "level_rank" }
   | { kind: "tool_call"; tool: string; args: Record<string, unknown> };
 
 export type Predicate =

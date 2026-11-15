@@ -18,6 +18,67 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.11] — 2026-11-13
+
+### Added
+
+- **Graph quality: how much of the call graph is a guess.** Every index now:
+  - labels each call edge `resolved`, `likely`, `name guess` or `unscored`,
+    from the confidence the indexer already stores;
+  - finds *suspect hubs*, repo functions that built-in methods such as
+    `Array.map` bind to by name;
+  - judges the graph `ok`, `degraded` or `poor`, and writes the verdict to
+    `.cortex/quality.json`.
+
+  It is silent when `ok`. Otherwise `cortex index` and `index_repository` show
+  a short `⚠ graph quality` block. Its advice is to treat callers and callees as
+  hints and confirm them with `search_code`, not to reindex, because the same
+  tree yields the same graph. `CORTEX_QUALITY=0` turns it off. See
+  [graph-quality.md](docs/architecture/graph-quality.md).
+- **`cortex quality [--json|--headline]`** prints the last index's report: the
+  label counts, the shares against their thresholds, the suspect hubs and the
+  reasons. `--headline` prints one line or nothing, and SessionStart now shows
+  that line when the graph is `degraded` or `poor`.
+- **`GET /api/quality?project=<name>`** serves the report as `{ version,
+  report }`, where `report` is nullable. It is served under the index-baseline
+  ETag, so a client revalidating with `If-None-Match` gets a `304` until the
+  next index. Schema: [`quality.schema.json`](docs/api/quality.schema.json).
+  The contract version stays 1.
+- **Four eval metrics and a release gate.** `guess_share`,
+  `suspect_hub_share`, `unscored_share` and `quality_level` join the universal
+  pack. `npm run eval:gate` runs the new `self` suite under the new `--strict`
+  flag. The suite is cortex at a pinned SHA, plus any private targets listed in
+  `~/.cortex/<repoId>/evals/targets.private.json`. Every checkout of the
+  repository shares that file, and none can commit it. `--strict` exits
+  non-zero on a regression, on a baseline metric the run could not measure,
+  compare or find, and on a target that failed or judged nothing. Its verdict
+  line names the targets it gated.
+
+### Changed
+
+- **Eval scratch lives under `evals/.cache/`.** That covers target clones,
+  their graphs, and the run reports (`evals/.cache/reports/`).
+  cortex-indexer skips directories named `.cache` at any depth, but a linked
+  worktree's index does not read the root `.gitignore`. A worktree that ran
+  the eval therefore indexed the clones in `evals/cache/` into its own graph,
+  and its answers and quality verdict described them. Delete any old
+  `evals/cache/` and `evals/reports/`.
+
+### Fixed
+
+- **The eval harness grades the indexer it is given.** A cached graph was
+  reused whenever it was newer than the target's HEAD, so a run with a new
+  indexer binary scored the previous binary's graph. The cache now records
+  which binary built it (realpath, size and mtime, honouring
+  `CORTEX_INDEXER_PATH`) and rebuilds when that changes. Each rebuild starts
+  from an empty graph, because cortex-indexer is incremental and would
+  otherwise leave an unchanged tree's old graph in place.
+- **`index_repository` signals `index: completed` last.** Over MCP the signal
+  fired at the graph's publish, before the staleness sweep, the quality report,
+  the freshness baseline and the registry entry. A client refreshing on it
+  (Mesh does) read the previous report and freshness verdict, and after a first
+  index found no project at all. Now it fires once all of those exist.
+
 ## [2.4.10] — 2026-11-13
 
 ### Fixed
@@ -3038,6 +3099,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.11]: https://github.com/ruevu/cortex/releases/tag/v2.4.11
 [2.4.10]: https://github.com/ruevu/cortex/releases/tag/v2.4.10
 [2.4.9]: https://github.com/ruevu/cortex/releases/tag/v2.4.9
 [2.4.8]: https://github.com/ruevu/cortex/releases/tag/v2.4.8

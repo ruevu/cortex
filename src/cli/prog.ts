@@ -14,7 +14,7 @@
 
 export const NAMESPACES = ["code", "decision", "graph", "index", "eval", "todo"];
 export const META_COMMANDS = [
-  "tour", "help", "install", "setup", "freshness", "reconcile", "staleness", "source-drift", "brief", "doctor",
+  "tour", "help", "install", "setup", "freshness", "reconcile", "staleness", "quality", "source-drift", "brief", "doctor",
 ];
 
 export function progName(): string {

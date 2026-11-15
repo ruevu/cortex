@@ -37,6 +37,7 @@ import { positionAggregates } from "../frame-extraction/positioning/aggregate-po
 import { loadGovernance } from "../architecture/governed.js";
 import { respond, respondError } from "./api-respond.js";
 import { httpFreshnessFor } from "./api-freshness.js";
+import { httpQualityFor } from "./api-quality.js";
 import {
   resolveBindHost, methodAllowed, corsHeadersFor, checkAuth, safeStaticPath, SECURITY_HEADERS, urlTooLong,
 } from "./api-middleware.js";
@@ -44,7 +45,7 @@ import {
   CONTRACT_VERSION, GraphResponseSchema, ProjectsResponseSchema, FramesResponseSchema,
   FileEdgesResponseSchema, AggregatesResponseSchema, DecisionsResponseSchema,
   DecisionDetailResponseSchema, TodosResponseSchema, FreshnessResponseSchema, HealthResponseSchema,
-  ProjectParamSchema, DecisionIdParamSchema, ProvenanceFilterSchema, PresencePostSchema, PresenceAckResponseSchema,
+  QualityResponseSchema, ProjectParamSchema, DecisionIdParamSchema, ProvenanceFilterSchema, PresencePostSchema, PresenceAckResponseSchema,
   ShowFocusPostSchema, ShowFocusAckResponseSchema,
   StoriesResponseSchema, StoryDetailResponseSchema, StoryIdParamSchema,
   ShowAdvancePostSchema, ShowAdvanceAckResponseSchema,
@@ -467,6 +468,14 @@ export function startViewerServer(
         // — without that, a consumer sending If-None-Match gets a bodiless 304
         // and never observes drift changing until an unrelated reindex.
         respond(res, FreshnessResponseSchema, { version: CONTRACT_VERSION, ...verdict, source_drift }, { req, freshness: verdict, etag, sourceDrift: source_drift, headers: cors });
+        return;
+      }
+
+      // ── /api/quality ── the index-time report, under the index-baseline ETag:
+      // sound only because every index writes it before moving the baseline
+      // (src/quality/run-report.ts).
+      if (pathname === "/api/quality") {
+        respond(res, QualityResponseSchema, { version: CONTRACT_VERSION, report: httpQualityFor(project ?? null, registry) }, freshCtx());
         return;
       }
 

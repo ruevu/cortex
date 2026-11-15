@@ -1,6 +1,7 @@
 import { GraphStore } from "../../../src/graph/store.js";
 import type { Assertion, AssertionResult, Predicate } from "./types.js";
 import { computeLanguageDensity } from "./universal.js";
+import { computeGraphQuality, LEVEL_RANK } from "../../../src/quality/compute.js";
 
 export type RunnerContext = {
   dbPath: string;
@@ -51,6 +52,28 @@ export function runAssertion(a: Assertion, ctx: RunnerContext): AssertionResult 
     }
     case "language_density": {
       observed = computeLanguageDensity(store);
+      break;
+    }
+    case "graph_quality": {
+      const q = computeGraphQuality(store.queryRaw.bind(store));
+      if (!q.verdict.judged) {
+        // The computation itself declares this graph unjudgeable: too few
+        // CALLS edges, or most of them unscored. It reports level `ok` with a
+        // note — right for a user, who is shown no verdict, and wrong here,
+        // where `ok` is the best score a ratchet can record. So nothing is
+        // measured, and a baseline that did judge this target trips NOT
+        // MEASURED in the strict gate instead of passing as a perfect graph.
+        // (An empty graph lands here too: zero edges are never judged.)
+        observed = null;
+        break;
+      }
+      switch (a.query.field) {
+        case "guess_share_pct": observed = q.guess_share * 100; break;
+        case "hub_share_pct": observed = q.hub_share * 100; break;
+        // Judged implies total ≥ 200, so this never divides by zero.
+        case "unscored_share_pct": observed = (q.calls.unscored / q.calls.total) * 100; break;
+        case "level_rank": observed = LEVEL_RANK[q.verdict.level]; break;
+      }
       break;
     }
     case "tool_call":
