@@ -14,8 +14,8 @@ import { evalIndexerEnv } from "../../src/cli/commands/eval.js";
  * indexed: by hand, after every commit, at session start. Its scratch has to
  * be invisible to that index in a LINKED worktree too, because that is where
  * the release gate runs and where cortex-indexer does not read the root
- * .gitignore (cortex-indexer todo T-0fy2). There a cloned target becomes part of the checkout's
- * own graph, search results and quality verdict (T-a9kr).
+ * .gitignore (cortex-indexer todo T-0fy2). There a cloned target becomes part
+ * of the checkout's own graph, search results and quality verdict (T-a9kr).
  *
  * This runs the real indexer, because the guarantee is the indexer's.
  */

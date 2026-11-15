@@ -14,8 +14,8 @@ import { join, resolve } from "node:path";
  * `tmp`, `dist`, `vendor`, `coverage` and `node_modules`. A leading dot alone
  * hides nothing: `evals/.reports/` is indexed. The name holds where the
  * gitignore does not. A linked worktree's index does not read the root
- * `.gitignore` (cortex-indexer todo T-0fy2: it loads that file only when `.git`
-is a directory), so the old `evals/cache/` and `evals/reports/` were
+ * `.gitignore` (cortex-indexer todo T-0fy2: it loads that file only when
+ * `.git` is a directory), so the old `evals/cache/` and `evals/reports/` were
  * indexed there, clones and all. That is the worktree the release gate runs
  * in, and its graph, search results and quality verdict then described the
  * clones (T-a9kr). tests/evals/paths.test.ts pins this against the real
