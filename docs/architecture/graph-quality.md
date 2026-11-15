@@ -228,8 +228,3 @@ a built-in method will trip the gate.
 - **Exclusions.** The report has no coverage section yet. Vendored and bundled
   code is excluded by default, and the choices recorded in `cortex.json`, in a
   later phase (`D-ykv9`).
-- **Eval clones are indexed.** `evals/cache/` is gitignored, but cortex-indexer
-  does not honour that rule. A checkout that has run the eval therefore indexes
-  the cloned targets into its own graph, and its verdict and answers describe
-  them too. Remove `evals/cache/` and `evals/reports/` and reindex
-  (todo `T-a9kr`).

@@ -18,11 +18,14 @@ export default defineConfig({
       // their own test suites which vitest must not pick up.
       "**/.tmp/**",
       // Same hazard, second location: the eval harness clones its corpus
-      // targets into evals/cache/<target>/src/. Those are whole third-party
-      // repos — elk, vueuse, trpc — carrying hundreds of their own tests that
-      // fail here for want of their own dependencies. Without this, `npm test`
-      // breaks for anyone who has ever run the corpus, and the breakage looks
-      // like 400 failing files rather than a missing exclusion.
+      // targets into evals/.cache/<target>/src/ (evals/src/paths.ts). Those
+      // are whole third-party repos — elk, vueuse, trpc — carrying hundreds of
+      // their own tests that fail here for want of their own dependencies.
+      // Without this, `npm test` breaks for anyone who has ever run the
+      // corpus, and the breakage looks like 400 failing files rather than a
+      // missing exclusion. evals/cache/ is where clones lived before 2.4.11;
+      // checkouts that ran the eval then still have them.
+      "**/evals/.cache/**",
       "**/evals/cache/**",
     ],
   },

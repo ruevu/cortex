@@ -5,6 +5,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { acquireTarget, indexerIdentity, needsReindex, type ReindexState } from "../../evals/src/target.js";
+import { EVAL_CACHE_ROOT } from "../../evals/src/paths.js";
 
 /** A cached graph newer than HEAD, built by the indexer that is current now. */
 const fresh: ReindexState = {
@@ -70,7 +71,7 @@ describe("acquireTarget's graph cache", () => {
   let name: string;
 
   const runs = () => (existsSync(log) ? readFileSync(log, "utf-8").trim().split("\n").length : 0);
-  const cacheDir = () => resolve(process.cwd(), "evals/cache", name);
+  const cacheDir = () => join(EVAL_CACHE_ROOT, name);
   const target = () => ({ name, local_path: source });
   const age = (path: string, secondsAgo: number) => {
     const t = Date.now() / 1000 - secondsAgo;

@@ -283,9 +283,9 @@ definition, or could otherwise move call edges. Its targets:
 
 ### The graph cache knows which indexer built it
 
-A target's cached graph (`evals/cache/<target>/graph.db`) is reused only when
+A target's cached graph (`evals/.cache/<target>/graph.db`) is reused only when
 it is at least as new as the workdir's `.git/HEAD` **and** was built by the
-current indexer. `evals/cache/<target>/indexer-identity` records the binary
+current indexer. `evals/.cache/<target>/indexer-identity` records the binary
 `resolveIndexerBinary()` returns (which honours `CORTEX_INDEXER_PATH`) as its
 realpath, size and mtime. The stamp is removed before a rebuild and written
 only after the indexer exits 0, so a failed build never passes for a good one.
@@ -297,14 +297,24 @@ indexer's graph.
 
 ## Gotchas
 
-- **`evals/cache/` holds whole third-party repositories.** They carry their own
-  test suites; `vitest.config.ts` excludes the directory, or `npm test` picks up
+- **`evals/.cache/` holds whole repositories.** They carry their own test
+  suites; `vitest.config.ts` excludes the directory, or `npm test` picks up
   hundreds of foreign tests that fail for want of their own dependencies.
-- **…and `cortex index` indexes them.** `evals/cache/` is gitignored, but
-  cortex-indexer does not honour that rule. A checkout that has run the eval
-  therefore indexes every clone into its own graph, and its answers and quality
-  verdict describe them too. Remove `evals/cache/` and `evals/reports/` and
-  reindex (todo `T-a9kr`).
+- **…which is why every scratch path is under a directory named `.cache`.**
+  That covers the clones, their graphs, and the run reports in
+  `evals/.cache/reports/` (`evals/src/paths.ts`).
+  - cortex-indexer skips directories by name, at any depth: `.cache`, `.tmp`,
+    `tmp`, `dist`, `vendor`, `coverage` and `node_modules`.
+  - A leading dot alone hides nothing: `evals/.reports/` would be indexed.
+  - A linked worktree's index does not read the root `.gitignore`. The
+    indexer loads that file only when `.git` is a directory (cortex-indexer
+    todo `T-0fy2`).
+    So before 2.4.11, a worktree that ran the eval indexed every clone in
+    `evals/cache/` into its own graph, and its answers and quality verdict
+    described them (`T-a9kr`).
+  - `tests/evals/paths.test.ts` pins this against the real indexer.
+
+  Delete any `evals/cache/` and `evals/reports/` left from before.
 - **`evals/` is not typechecked by `npm test`.** The root `tsconfig.json`
   includes only `src`, and vitest transpiles without typechecking. The gate is
   `npx tsc --noEmit -p evals/tsconfig.json 2>&1 | grep -v '^src/viewer/'`, which

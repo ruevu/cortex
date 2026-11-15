@@ -28,8 +28,9 @@ can commit the files. Capture a baseline with
 `npm run eval -- --capture-baseline=<name>`. The verdict line lists the gated
 targets, and says when the private file was not found.
 
-Running the eval inside a checkout clones the targets into `cache/`, and the
-next `cortex index` of that checkout indexes them too (todo T-a9kr). Remove
-`cache/` and `reports/` before relying on that checkout's graph.
+Clones, their graphs and the run reports go to `.cache/`, a directory name
+cortex-indexer never reads, so running the eval leaves the checkout's own graph
+alone. Delete any `cache/` and `reports/` left from before 2.4.11, because a
+linked worktree's index reads them (todo T-a9kr).
 
 Details: [eval-harness.md § Gating](../docs/architecture/eval-harness.md#gating).

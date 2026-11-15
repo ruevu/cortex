@@ -11,6 +11,7 @@ import { applyRatchet } from "./assertions/verdicts.js";
 import { mergeImprovements } from "./baselines.js";
 import { writeReportArtifacts, type TargetReport } from "./report.js";
 import { gateHeadline, strictGate, type FailedTarget } from "./gate.js";
+import { EVAL_CACHE_ROOT, EVAL_REPORTS_ROOT } from "./paths.js";
 import type {
   Target,
   AssertionResult,
@@ -65,7 +66,7 @@ function runTarget(
   scorecard.indexer_seconds = acquired.indexer_seconds;
 
   const fixture = loadFixture(acquired.name);
-  const decisionsDbPath = join(resolve("evals/cache"), acquired.name, "decisions.db");
+  const decisionsDbPath = join(EVAL_CACHE_ROOT, acquired.name, "decisions.db");
 
   const results: AssertionResult[] = [];
   const packs = target.packs ?? ["universal"];
@@ -215,7 +216,7 @@ function main(): void {
   }
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").replace(/T/, "_").slice(0, 16);
-  const reportsDir = resolve("evals/reports", stamp);
+  const reportsDir = join(EVAL_REPORTS_ROOT, stamp);
   const { summaryPath } = writeReportArtifacts(reportsDir, reports);
   console.log(`Eval complete. Summary: ${summaryPath}`);
 

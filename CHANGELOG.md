@@ -54,6 +54,16 @@ All notable changes to Cortex are documented here. The format follows
   compare or find, and on a target that failed or judged nothing. Its verdict
   line names the targets it gated.
 
+### Changed
+
+- **Eval scratch lives under `evals/.cache/`.** That covers target clones,
+  their graphs, and the run reports (`evals/.cache/reports/`).
+  cortex-indexer skips directories named `.cache` at any depth, but a linked
+  worktree's index does not read the root `.gitignore`. A worktree that ran
+  the eval therefore indexed the clones in `evals/cache/` into its own graph,
+  and its answers and quality verdict described them. Delete any old
+  `evals/cache/` and `evals/reports/`.
+
 ### Fixed
 
 - **The eval harness grades the indexer it is given.** A cached graph was
@@ -68,13 +78,6 @@ All notable changes to Cortex are documented here. The format follows
   the freshness baseline and the registry entry. A client refreshing on it
   (Mesh does) read the previous report and freshness verdict, and after a first
   index found no project at all. Now it fires once all of those exist.
-
-### Notes
-
-- **Known issue:** running the eval inside a checkout clones its targets into `evals/cache/`,
-  and the next `cortex index` of that checkout indexes those clones too. Its
-  answers and quality verdict then describe them. Remove `evals/cache/` and
-  `evals/reports/` and reindex.
 
 ## [2.4.10] — 2026-11-13
 

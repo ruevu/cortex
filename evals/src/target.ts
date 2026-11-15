@@ -4,16 +4,15 @@ import { dirname, join, resolve } from "node:path";
 import type { Scorecard, Target } from "./assertions/types.js";
 import { evalIndexerEnv } from "../../src/cli/commands/eval.js";
 import { resolveIndexerBinary } from "../../src/indexer/binary.js";
+import { EVAL_CACHE_ROOT as CACHE_ROOT } from "./paths.js";
 
 export type AcquiredTarget = {
   name: string;
   workdir: string;             // absolute path to the source tree
-  graphDbPath: string;         // absolute path to the graph.db this harness writes (under evals/cache/<name>/)
+  graphDbPath: string;         // absolute path to the graph.db this harness writes (under EVAL_CACHE_ROOT/<name>/)
   source_sha?: string;
   indexer_seconds: number | null;
 };
-
-const CACHE_ROOT = resolve(process.cwd(), "evals/cache");
 
 /** Beside each cached graph.db: the identity of the indexer that built it. */
 const IDENTITY_FILE = "indexer-identity";
@@ -133,10 +132,10 @@ function maybeReindex(workdir: string, graphDbPath: string): number | null {
     ["cli", "index_repository", JSON.stringify({ repo_path: workdir })],
     {
       stdio: "inherit",
-      // Redirect the indexer's slug cache + durable home into evals/cache
-      // (already gitignored eval scratch space) so corpus-target indexing
-      // never leaks entries into the real ~/.cache/cortex-indexer or
-      // ~/.cortex.
+      // Redirect the indexer's slug cache + durable home into the eval's
+      // scratch space (EVAL_CACHE_ROOT, see paths.ts) so corpus-target
+      // indexing never leaks entries into the real ~/.cache/cortex-indexer
+      // or ~/.cortex.
       env: { ...process.env, CORTEX_DB: graphDbPath, ...evalIndexerEnv(CACHE_ROOT) },
     },
   );
