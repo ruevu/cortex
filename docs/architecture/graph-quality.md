@@ -144,6 +144,17 @@ can see is the new report under the old ETag, which the baseline change then
 invalidates. `tests/quality/index-wiring.test.ts` enforces the order at all
 three sites (`D-3t5z`).
 
+A consumer driven by events gets the same guarantee. Over MCP,
+`index_repository` emits its `index: completed` signal as its last step,
+after the baseline has moved and the registry entry exists. A consumer that
+refetches on that signal (Mesh does) therefore reads the new report under the
+new ETag. Emitted at the publish instead, which is where it used to be, the
+signal arrived ahead of all three. A refetch then read the previous report,
+the previous freshness verdict, and after a first index no project at all.
+`tests/mcp-server/index-signal-emit.test.ts` pins it. `cortex index` emits no
+signal, and the background auto-index signals when its child process exits,
+after everything.
+
 Two smaller rules follow from where it runs:
 
 - `indexed_commit` comes from git, not from `cortex_index_meta`, which at that

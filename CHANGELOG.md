@@ -61,6 +61,11 @@ All notable changes to Cortex are documented here. The format follows
   `CORTEX_INDEXER_PATH`) and rebuilds when that changes. Each rebuild starts
   from an empty graph, because cortex-indexer is incremental and would
   otherwise leave an unchanged tree's old graph in place.
+- **`index_repository` signals `index: completed` last.** Over MCP the signal
+  fired at the graph's publish, before the staleness sweep, the quality report,
+  the freshness baseline and the registry entry. A client refreshing on it
+  (Mesh does) read the previous report and freshness verdict, and after a first
+  index found no project at all. Now it fires once all of those exist.
 
 ### Notes
 

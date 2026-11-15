@@ -230,6 +230,12 @@ export type ProjectionDelta =
  * `repo_path` because the ws server binds one `projectId` at startup while
  * index runs concern arbitrary checkouts — a linked worktree is a different
  * cortex project from the sidecar's home repo, and the client matches on path.
+ *
+ * `completed` is the last thing an index does. By the time it arrives,
+ * everything the run writes is readable: the graph, the staleness and quality
+ * reports, the freshness baseline (the data endpoints' ETag) and the registry
+ * entry. So a client can refetch on it and read this run's state rather than
+ * the previous one's. See docs/architecture/graph-quality.md#the-ordering-contract.
  */
 export interface IndexSignalMsg {
   type: 'index';
