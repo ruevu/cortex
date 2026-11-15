@@ -265,11 +265,21 @@ definition, or could otherwise move call edges. Its targets:
 - **`cortex`**, a public target in `evals/targets.json` pinned at a SHA, so its
   baseline describes a fixed tree and only the indexer or the definitions can
   move it;
-- **private targets** from `evals/targets.private.json`. That file is
-  gitignored and has the same shape as a public entry (a `file://` `repo_url`
-  works for a local repo), and their baselines live in the gitignored
-  `evals/baselines/private/`. A run without the file says so on stderr, and a
-  target name may appear in only one of the two files.
+- **private targets** from `targets.private.json` in the repository's private
+  evals directory, `~/.cortex/<repoId>/evals/` (or
+  `$CORTEX_HOME/.cortex/<repoId>/`), beside the decisions store. `<repoId>` is
+  the id in the committed `cortex.json`. The file has the same shape as a public
+  entry (a `file://` `repo_url` works for a local repo), and the baselines for
+  its targets live beside it in `baselines/`.
+
+  It is in no working tree, on purpose. A gitignored file in a checkout exists
+  only there: a new worktree starts without it, and `git worktree remove`
+  deletes it without a word. The gate would then quietly shrink to the public
+  targets, and the baselines captured before the first change would be gone.
+
+  A run without the file says so on stderr, and again on the verdict line, for
+  example `strict gate: PASS — gated: cortex (no private targets file at …)`.
+  A target name may appear in only one of the two files.
 
 ### The graph cache knows which indexer built it
 

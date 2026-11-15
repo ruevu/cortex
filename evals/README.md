@@ -20,9 +20,13 @@ that failed or judged nothing. Run it before a release that bumps the indexer
 pin, changes a graph-quality definition, or could otherwise move call edges.
 
 The suite is `cortex`, pinned at a SHA in `targets.json`, plus any private
-targets in `targets.private.json` (gitignored, same shape, `file://` URLs
-work). Private baselines go to `baselines/private/` (gitignored); capture one
-with `npm run eval -- --capture-baseline=<name>`.
+targets in `~/.cortex/<repoId>/evals/targets.private.json`, where `<repoId>` is
+the id in the committed `cortex.json`. That file has the same shape, and
+`file://` URLs work. Their baselines go to `baselines/` beside it. Every
+worktree of the repository therefore gates the same targets, and none of them
+can commit the files. Capture a baseline with
+`npm run eval -- --capture-baseline=<name>`. The verdict line lists the gated
+targets, and says when the private file was not found.
 
 Running the eval inside a checkout clones the targets into `cache/`, and the
 next `cortex index` of that checkout indexes them too (todo T-a9kr). Remove

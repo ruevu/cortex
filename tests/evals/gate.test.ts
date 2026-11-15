@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { strictGate } from "../../evals/src/gate.js";
+import { gateHeadline, strictGate } from "../../evals/src/gate.js";
 import type { TargetReport } from "../../evals/src/report.js";
 import type { Assertion, AssertionResult, Baseline, Scorecard } from "../../evals/src/assertions/types.js";
 
@@ -158,5 +158,23 @@ describe("strictGate", () => {
       "[mesh] failed: clone failed",
       "[other] REGRESSED guess_share",
     ]);
+  });
+});
+
+describe("gateHeadline", () => {
+  // The verdict line is what a release reads. A gate that checked fewer
+  // targets than the same command checks elsewhere must say so there, not
+  // only in a note scrolled away above minutes of indexer output.
+  it("names every target the gate covered", () => {
+    expect(gateHeadline(true, ["cortex", "mesh"], null)).toBe("strict gate: PASS — gated: cortex, mesh");
+  });
+
+  it("says on the verdict line when the private targets were not in the run", () => {
+    const note = "no private targets file at /p/targets.private.json — private targets (mesh) are not in this run";
+    expect(gateHeadline(true, ["cortex"], note)).toBe(`strict gate: PASS — gated: cortex (${note})`);
+  });
+
+  it("reads FAIL for a failed gate", () => {
+    expect(gateHeadline(false, ["cortex", "mesh"], null)).toBe("strict gate: FAIL — gated: cortex, mesh");
   });
 });

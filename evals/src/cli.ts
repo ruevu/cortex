@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { acquireTarget, compareGraphShape, forceReindex } from "./target.js";
-import { baselinePath, loadTargets } from "./target-config.js";
+import { baselinePath, loadTargets, privateEvalsDir, privateTargetsNote } from "./target-config.js";
 import { computeScorecard } from "./scorecard.js";
 import { runAssertion } from "./assertions/runner.js";
 import { runToolAssertion } from "./assertions/tool-runner.js";
@@ -10,7 +10,7 @@ import { ALL_ASSERTIONS, selectAssertions } from "./assertions/registry.js";
 import { applyRatchet } from "./assertions/verdicts.js";
 import { mergeImprovements } from "./baselines.js";
 import { writeReportArtifacts, type TargetReport } from "./report.js";
-import { strictGate, type FailedTarget } from "./gate.js";
+import { gateHeadline, strictGate, type FailedTarget } from "./gate.js";
 import type {
   Target,
   AssertionResult,
@@ -224,10 +224,11 @@ function main(): void {
   // nothing pending is cut off.
   if (args.strict) {
     const gate = strictGate(reports, failed);
+    const headline = gateHeadline(gate.ok, selected.map((t) => t.name), privateTargetsNote(privateEvalsDir()));
     if (gate.ok) {
-      console.log("strict gate: PASS");
+      console.log(headline);
     } else {
-      console.error("strict gate: FAIL");
+      console.error(headline);
       for (const line of gate.lines) console.error(`  ${line}`);
       process.exitCode = 1;
     }

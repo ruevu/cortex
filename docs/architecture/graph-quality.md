@@ -196,9 +196,10 @@ too small or too unscored to judge can never ratchet a share as an improvement.
 *lower* the guess share and read as a gain.
 
 `npm run eval:gate` runs the **self suite** under `--strict`. That is cortex at
-a pinned SHA, plus any private targets in the gitignored
-`evals/targets.private.json`, whose baselines live in the gitignored
-`evals/baselines/private/`. It exits non-zero on any regression, on a metric
+a pinned SHA, plus any private targets in the repository's private evals
+directory, `~/.cortex/<repoId>/evals/`, where their baselines live too. That
+directory is in no working tree, so every checkout gates the same targets. The
+verdict line names them. It exits non-zero on any regression, on a metric
 the baseline has but the run could not measure or compare, and on a target
 that failed or judged nothing. It is the release gate for every change to
 these definitions and for every indexer bump. The gate rules and the

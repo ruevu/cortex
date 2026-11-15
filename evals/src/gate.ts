@@ -86,3 +86,17 @@ export function strictGate(reports: TargetReport[], failed: FailedTarget[]): Gat
 
   return { ok: lines.length === 0, lines };
 }
+
+/**
+ * The verdict's first line: PASS or FAIL, then every target the gate covered.
+ * When the private targets were not in the run, the line also says why
+ * (`privateNote`, from target-config.ts's privateTargetsNote).
+ *
+ * The verdict line is what a release reads. A gate that covered fewer targets
+ * than the same command covers elsewhere must say so here, not only in a note
+ * printed at load, before minutes of clone and indexer output.
+ */
+export function gateHeadline(ok: boolean, targets: string[], privateNote: string | null): string {
+  const head = `strict gate: ${ok ? "PASS" : "FAIL"} — gated: ${targets.join(", ")}`;
+  return privateNote ? `${head} (${privateNote})` : head;
+}

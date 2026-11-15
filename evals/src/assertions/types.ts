@@ -9,10 +9,11 @@ export type Target = {
   packs?: AssertionScope[];
   /** Suite membership for --suite selection. Defaults to ["nuxt"]. */
   suites?: string[];
-  /** True for a target read from the gitignored evals/targets.private.json.
-   *  Set by the loader only (target-config.ts), never written in a targets
-   *  file: it routes the target's baseline to the gitignored
-   *  evals/baselines/private/. */
+  /** True for a target read from the repository's private targets file,
+   *  `~/.cortex/<repoId>/evals/targets.private.json`. Set by the loader only
+   *  (target-config.ts), never written in a targets file: it routes the
+   *  target's baseline to that directory's `baselines/`, outside every
+   *  working tree. */
   private?: boolean;
 };
 

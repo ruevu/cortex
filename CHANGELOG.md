@@ -48,9 +48,11 @@ All notable changes to Cortex are documented here. The format follows
   `suspect_hub_share`, `unscored_share` and `quality_level` join the universal
   pack. `npm run eval:gate` runs the new `self` suite under the new `--strict`
   flag. The suite is cortex at a pinned SHA, plus any private targets listed in
-  a gitignored `evals/targets.private.json`. `--strict` exits non-zero on a
-  regression, on a baseline metric the run could not measure, compare or find,
-  and on a target that failed or judged nothing.
+  `~/.cortex/<repoId>/evals/targets.private.json`. Every checkout of the
+  repository shares that file, and none can commit it. `--strict` exits
+  non-zero on a regression, on a baseline metric the run could not measure,
+  compare or find, and on a target that failed or judged nothing. Its verdict
+  line names the targets it gated.
 
 ### Fixed
 
