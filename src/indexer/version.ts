@@ -6,17 +6,19 @@
  * NOTE: mirror any change in scripts/fetch-indexer.mjs (drift-guard test in
  * tests/indexer/fetch-indexer.test.ts enforces equality).
  */
-export const CORTEX_INDEXER_VERSION = "0.3.2";
+export const CORTEX_INDEXER_VERSION = "0.3.4";
 
 /**
  * Supported (platform, arch) targets → release asset basename, else null.
  *
- * darwin-x64 (Intel Mac) is intentionally absent: GitHub's macos-13 runners no
- * longer dispatch reliably, so cortex-indexer publishes no darwin-x64 asset.
- * Intel-Mac users hit the actionable "build from source" path, not a 404.
+ * Every entry must have a published asset in the pinned release, or that
+ * platform downloads a 404 instead of taking the "build from source" path.
+ * darwin-x64 is published again from 0.3.4 (built on macos-15-intel); both
+ * macOS binaries require macOS 14.0 or later.
  */
 const SUPPORTED = new Set([
   "darwin-arm64",
+  "darwin-x64",
   "linux-x64",
   "linux-arm64",
 ]);

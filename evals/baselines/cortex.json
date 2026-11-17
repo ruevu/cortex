@@ -1,24 +1,24 @@
 {
   "target": "cortex",
-  "captured_at": "2026-11-13T12:02:33.561Z",
+  "captured_at": "2026-11-17T01:30:36.077Z",
   "source_sha": "add6ed69f59334420802ab5aa8ab3cdad19973e6",
   "nodes_by_label": {
     "channel": 3,
     "class": 37,
     "file": 726,
-    "folder": 101,
+    "folder": 102,
     "function": 1457,
     "interface": 210,
     "method": 186,
-    "module": 725,
+    "module": 723,
     "project": 1,
     "route": 35,
     "section": 837,
     "type": 153,
-    "variable": 1790
+    "variable": 1791
   },
   "edges_by_type": {
-    "CALLS": 4272,
+    "CALLS": 3437,
     "CONFIGURES": 44,
     "CONTAINS_FILE": 726,
     "CONTAINS_FOLDER": 96,
@@ -30,14 +30,14 @@
     "IMPORTS": 1595,
     "LISTENS_ON": 5,
     "RAISES": 60,
-    "SEMANTICALLY_RELATED": 157,
+    "SEMANTICALLY_RELATED": 143,
     "SIMILAR_TO": 62,
     "USAGE": 348,
     "WRITES": 73
   },
   "per_assertion": {
     "file_sourced_calls": 0,
-    "call_attribution_rate": 62.172284644194754,
+    "call_attribution_rate": 59.20861216176898,
     "qn_collisions": 0,
     "orphan_definition_rate": 0,
     "per_language_function_density": {
@@ -53,9 +53,9 @@
       "js": 7.689655172413793,
       "css": 0
     },
-    "guess_share": 33.26310861423221,
-    "suspect_hub_share": 9.925093632958802,
-    "unscored_share": 0.1404494382022472,
+    "guess_share": 18.620890311318007,
+    "suspect_hub_share": 0,
+    "unscored_share": 0.17457084666860634,
     "quality_level": 0
   }
 }
