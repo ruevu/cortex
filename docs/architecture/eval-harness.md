@@ -102,9 +102,11 @@ report to `evals/reports/<timestamp>/`. That flow is informed by the
 
 Baselines are committed for all four default targets — `nuxt-ui`,
 `nuxthub-starter`, `elk` and `open-pencil` — plus `trpc` and `vueuse`, all
-captured on indexer 0.3.2. The remaining seventeen corpus targets have none yet:
-they report `(no baseline)` until someone captures one, which is the honest
-state rather than a failure. A corpus run takes hours (clone + full index each),
+captured on indexer 0.3.5, as is `cortex`. Recapture them with every indexer
+pin bump, so a baseline never grades one indexer against another's numbers.
+The remaining seventeen corpus targets have none yet: they report
+`(no baseline)` until someone captures one, which is the honest state rather
+than a failure. A corpus run takes hours (clone + full index each),
 so the corpus is opt-in and its baselines are captured deliberately rather than
 on every run.
 

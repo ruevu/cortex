@@ -1,6 +1,6 @@
 {
   "target": "nuxthub-starter",
-  "captured_at": "2026-08-28T22:43:35.062Z",
+  "captured_at": "2026-11-17T23:11:07.729Z",
   "source_sha": "edd6f104e2eaadad93e5b214bac2195c7e95682d",
   "nodes_by_label": {
     "file": 24,
@@ -29,11 +29,11 @@
     "vue_function_node_count_nonzero": 6,
     "vue_function_has_high_degree": 0,
     "sfc_qn_well_formed": [
-      "Users-rka-Development-cortex-wt-eval-universal-evals-cache-nuxthub-starter-src.app.components.ImageGallery.uploadImage",
-      "Users-rka-Development-cortex-wt-eval-universal-evals-cache-nuxthub-starter-src.app.components.ImageGallery.deleteImage",
-      "Users-rka-Development-cortex-wt-eval-universal-evals-cache-nuxthub-starter-src.app.components.MessagesPanel.sendMessage",
-      "Users-rka-Development-cortex-wt-eval-universal-evals-cache-nuxthub-starter-src.app.components.MessagesPanel.deleteMessage",
-      "Users-rka-Development-cortex-wt-eval-universal-evals-cache-nuxthub-starter-src.app.components.MessagesPanel.updateMessage"
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxthub-starter-src.app.components.ImageGallery.uploadImage",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxthub-starter-src.app.components.ImageGallery.deleteImage",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxthub-starter-src.app.components.MessagesPanel.sendMessage",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxthub-starter-src.app.components.MessagesPanel.deleteMessage",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxthub-starter-src.app.components.MessagesPanel.updateMessage"
     ],
     "vue_file_is_module_node": 5,
     "nitro_handler_function_exists": 9,

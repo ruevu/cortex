@@ -95,6 +95,18 @@ open-pencil shows why the hub rule exists. Its guess share alone would pass,
 but more than one call edge in seven runs through a function that a built-in
 method happens to share a name with.
 
+cortex-indexer 0.3.4 and 0.3.5 refuse those bindings at the source (decisions
+D-gfxr and D-12b9 in cortex-indexer). The same two, measured on 2026-11-17 with
+0.3.5:
+
+| repository | call edges | name guesses | through suspect hubs | verdict |
+|---|---|---|---|---|
+| cortex (v2.4.10, the self suite's pin) | 3,437 | 18.6% | none | `ok` |
+| open-pencil (`73b2690b`, a newer tree) | 66,863 | 39.4% | 0.9% | `ok` |
+
+The thresholds are unchanged. open-pencil is now `ok` because its hub share
+fell from 15.3% to 0.9%; its guess share sits just under the 40% line.
+
 ## Where it shows
 
 The verdict is **silent unless abnormal**. When the level is `ok`, judged or
@@ -206,18 +218,18 @@ these definitions and for every indexer bump. The gate rules and the
 indexer-aware graph cache are described in
 [eval-harness.md § Gating](eval-harness.md#gating).
 
-At its pin, cortex reads `ok` by **4 edges**: 424 of its 4,272 call edges run
-through suspect hubs, and 428 would make it `degraded`. Five hubs carry those
-edges:
-- `push` and `pop` in the viewer's drawer stack;
-- `run` in a test helper;
-- `find` and `endsWith` in `src/shared/resolve-input.ts`, both new in v2.4.10.
-  Between them they hold 106 edges (2.4 points), because built-in `Array.find`
-  and `String.endsWith` calls bind to them by name.
+On indexer 0.3.2, cortex read `ok` at its pin by **4 edges**: 424 of its
+4,272 call edges ran through suspect hubs, and 428 would have made it
+`degraded`. Five hubs carried them: `push` and `pop` in the viewer's drawer
+stack, `run` in a test helper, and `find` and `endsWith` in
+`src/shared/resolve-input.ts`. Built-in `Array.find` and `String.endsWith`
+calls bound to the last two by name.
 
-Each is the shape the hub rule exists to catch. The next helper named after a
-built-in method therefore turns cortex's own live verdict `degraded`. The gate
-grades the pinned tree, so it trips only once the pin moves past that helper.
+Since 0.3.4 a member call no longer binds a repo function by name alone
+(D-gfxr), so those edges are gone: at the 0.3.5 pin, no call edge runs
+through a suspect hub. A helper named after a built-in method no longer
+collects `xs.find()` calls. A hub can still form through an imported root
+(`IMPORTED_LIST.map()`), which the rule exempts.
 
 ## Not here yet
 
