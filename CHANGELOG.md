@@ -20,11 +20,14 @@ All notable changes to Cortex are documented here. The format follows
 
 ## [2.4.12] — 2026-11-17
 
+> **Upgrading:** the build cache keys on the indexer version, so the first
+> index after upgrading is a full one, and TypeScript graphs change a lot.
+
 ### Changed
 
 - **The indexer is pinned to
-  [cortex-indexer 0.3.4](https://github.com/ruevu/cortex-indexer/releases/tag/v0.3.4)
-  (was 0.3.2).** TypeScript graphs change substantially on the first reindex:
+  [cortex-indexer 0.3.5](https://github.com/ruevu/cortex-indexer/releases/tag/v0.3.5)
+  (was 0.3.2).**
   - **Imports resolve the way TypeScript resolves them:**
     - tsconfig/jsconfig `paths` and `baseUrl`, through `extends`;
     - barrels (`index.ts`);
@@ -38,26 +41,57 @@ All notable changes to Cortex are documented here. The format follows
     - `counts.get()` on a Map no longer lands on the one repo class with a
       `get` method. On this repo, 157 calls pointed at
       `TodosRepository.get`.
-  - **A File node's qualified name keeps its extension** (0.3.3).
-    `Component.tsx` and `Component.css` are now two nodes, and `lib.ts` beside
-    `lib/index.ts` no longer folds into one.
+  - **Every file gets its own File node** (0.3.3). A File node's qualified
+    name keeps its extension, so `Component.tsx` and `Component.css` are two
+    nodes, and `lib.ts` beside `lib/index.ts` no longer folds into one.
+  - **A module keeps its name when something else shares it** (0.3.5).
+    - `Button.tsx` keeps its module over `Button.css` beside it.
+    - `store.ts` keeps its module over the folder `store/`.
+    - A module keeps its name over a variable of the same name in another
+      file.
+
+    Imports of the module land on it. Indexers 0.3.3 and 0.3.4 picked by file
+    path and got these wrong: on mesh, 78 code files had no module node.
   - **Name guesses** in the graph-quality verdict, before → after:
     - this repo: 33.3% → 18.6%;
     - mesh: 30.0% → 18.8%;
-    - a private TS monorepo: 54.0% (`degraded`) → 19.7% (`ok`).
-- **The indexer version is part of every build-cache key, so the first index
-  after upgrading is a full one.**
-- **The `cortex` eval baseline is recaptured for the new indexer.**
-  - `guess_share` and `suspect_hub_share` improve.
-  - `call_attribution_rate` drops (62.17 → 59.21; CALLS 4,272 → 3,437).
-    That metric is the share of call edges made inside a function or method.
-    The edges removed were wrong guesses, mostly made inside functions, so
-    the share falls although no remaining call loses its caller.
+    - a private TS monorepo: 54.0% (`poor`) → 19.7% (`ok`).
+- **The eval baselines are recaptured for the new indexer:** `cortex`, plus
+  the public targets `elk`, `nuxt-ui`, `nuxthub-starter`, `open-pencil`,
+  `trpc` and `vueuse`.
+  - On `cortex`, `guess_share` goes from 33.3% to 18.6% and
+    `suspect_hub_share` from 9.9% to 0.
+  - On `cortex`, `call_attribution_rate` drops (62.17 → 59.21; CALLS 4,272 →
+    3,437). That metric is the share of call edges made inside a function or
+    method. The edges removed were wrong guesses, mostly made inside
+    functions, so the share falls although no remaining call loses its
+    caller.
+  - The public baselines record `guess_share` and `suspect_hub_share` for the
+    first time. Five of the six targets have also moved upstream since their
+    last capture, so their other counts compare different trees.
+
+### Fixed
+
+- **A Mac older than macOS 14 is told why the indexer won't run.** Both
+  prebuilt macOS binaries need macOS 14.0 or later.
+  - On an older Mac, the installer skips the download and says so.
+  - A binary that can't start there is reported as needing macOS 14, not as
+    corrupt. Reinstalling would only fetch the same binary.
 
 ### Added
 
-- **Intel Macs get a prebuilt indexer again** (`darwin-x64`). Both macOS
-  binaries require macOS 14.0 or later.
+- **Intel Macs get a prebuilt indexer again** (`darwin-x64`), on macOS 14 or
+  later.
+
+### Known issue
+
+- **A markdown heading can take the name of the function it documents.**
+  When `useThing/index.md` opens with `# useThing` beside the `index.ts` that
+  exports `useThing`, both share a qualified name. The heading keeps it, and
+  calls to the function land on the heading. On `vueuse`, which documents
+  every composable this way, 956 of 1,757 call edges land on a heading
+  (475 under 0.3.2, which had the same collision). None of the other
+  measured repos is affected.
 
 ## [2.4.11] — 2026-11-13
 
