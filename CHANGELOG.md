@@ -18,6 +18,47 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.12] — 2026-11-17
+
+### Changed
+
+- **The indexer is pinned to
+  [cortex-indexer 0.3.4](https://github.com/ruevu/cortex-indexer/releases/tag/v0.3.4)
+  (was 0.3.2).** TypeScript graphs change substantially on the first reindex:
+  - **Imports resolve the way TypeScript resolves them:**
+    - tsconfig/jsconfig `paths` and `baseUrl`, through `extends`;
+    - barrels (`index.ts`);
+    - dotted file names (`tag.mapper.ts`);
+    - every name of a multi-name import.
+
+    On a large private TS monorepo, the share of call edges resolved through
+    an import went from under 0.1% to 46%.
+  - **Member calls stop binding builtins to repo code by name.**
+    - `items.map()` no longer lands on a repo function named `map`.
+    - `counts.get()` on a Map no longer lands on the one repo class with a
+      `get` method. On this repo, 157 calls pointed at
+      `TodosRepository.get`.
+  - **A File node's qualified name keeps its extension** (0.3.3).
+    `Component.tsx` and `Component.css` are now two nodes, and `lib.ts` beside
+    `lib/index.ts` no longer folds into one.
+  - **Name guesses** in the graph-quality verdict, before → after:
+    - this repo: 33.3% → 18.6%;
+    - mesh: 30.0% → 18.8%;
+    - a private TS monorepo: 54.0% (`degraded`) → 19.7% (`ok`).
+- **The indexer version is part of every build-cache key, so the first index
+  after upgrading is a full one.**
+- **The `cortex` eval baseline is recaptured for the new indexer.**
+  - `guess_share` and `suspect_hub_share` improve.
+  - `call_attribution_rate` drops (62.17 → 59.21; CALLS 4,272 → 3,437).
+    That metric is the share of call edges made inside a function or method.
+    The edges removed were wrong guesses, mostly made inside functions, so
+    the share falls although no remaining call loses its caller.
+
+### Added
+
+- **Intel Macs get a prebuilt indexer again** (`darwin-x64`). Both macOS
+  binaries require macOS 14.0 or later.
+
 ## [2.4.11] — 2026-11-13
 
 ### Added
@@ -3099,6 +3140,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.12]: https://github.com/ruevu/cortex/releases/tag/v2.4.12
 [2.4.11]: https://github.com/ruevu/cortex/releases/tag/v2.4.11
 [2.4.10]: https://github.com/ruevu/cortex/releases/tag/v2.4.10
 [2.4.9]: https://github.com/ruevu/cortex/releases/tag/v2.4.9
