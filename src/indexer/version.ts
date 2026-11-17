@@ -31,3 +31,24 @@ export function indexerAssetName(
   if (!SUPPORTED.has(key)) return null;
   return `cortex-indexer-${CORTEX_INDEXER_VERSION}-${key}.tar.gz`;
 }
+
+/**
+ * Darwin's major version for macOS 14 (Sonoma). Both macOS binaries are built
+ * with MACOSX_DEPLOYMENT_TARGET 14.0, so neither can start on anything older.
+ *
+ * NOTE: mirrored as MIN_DARWIN_MAJOR in scripts/fetch-indexer.mjs (drift-guard
+ * test in tests/indexer/fetch-indexer.test.ts).
+ */
+export const MIN_DARWIN_MAJOR = 23;
+
+/**
+ * True on a Mac older than macOS 14, where the prebuilt binary cannot run.
+ * `osRelease` is `os.release()` (the Darwin version). A release string that
+ * doesn't parse reads as false, so an odd kernel string never blocks a Mac
+ * that may well be able to run the binary.
+ */
+export function prebuiltNeedsNewerMacOS(platform: string, osRelease: string): boolean {
+  if (platform !== "darwin") return false;
+  const major = Number.parseInt(osRelease, 10);
+  return Number.isFinite(major) && major < MIN_DARWIN_MAJOR;
+}

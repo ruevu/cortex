@@ -1,5 +1,12 @@
 import { afterAll, afterEach, describe, expect, it } from "vitest";
-import { resolveIndexerBinary, ensureIndexer, IndexerNotInstalledError, IndexerVersionMismatchError } from "../../src/indexer/binary.js";
+import {
+  resolveIndexerBinary,
+  ensureIndexer,
+  indexerRunFailureMessage,
+  indexerPlatformNote,
+  IndexerNotInstalledError,
+  IndexerVersionMismatchError,
+} from "../../src/indexer/binary.js";
 import { CORTEX_INDEXER_VERSION } from "../../src/indexer/version.js";
 import { mkdtempSync, writeFileSync, chmodSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -129,5 +136,38 @@ describe("ensureIndexer", () => {
     process.env.CORTEX_INDEXER_PATH = "/nonexistent/changed-indexer";
     const second = await ensureIndexer();
     expect(second).toBe(bin);
+  });
+});
+
+describe("indexerRunFailureMessage", () => {
+  // A binary built for macOS 14 cannot start on 13; "reinstall" fetches the
+  // same binary again, so the message must name the real requirement.
+  it("names the macOS 14 requirement below Darwin 23, not corruption", () => {
+    const msg = indexerRunFailureMessage("spawn Unknown system error -86", "darwin", "22.6.0");
+    expect(msg).toMatch(/macOS 14 or later/);
+    expect(msg).toMatch(/CORTEX_INDEXER_PATH/);
+    expect(msg).not.toMatch(/corrupt/);
+  });
+
+  it("keeps the reinstall advice where the prebuilt binary is supported", () => {
+    for (const [platform, release] of [["darwin", "25.6.0"], ["linux", "6.1.0"]]) {
+      const msg = indexerRunFailureMessage("exit 1", platform, release);
+      expect(msg).toMatch(/may be corrupt/);
+      expect(msg).toMatch(/npm run fetch-indexer/);
+    }
+  });
+});
+
+describe("indexerPlatformNote", () => {
+  it("says the prebuilt binary needs macOS 14 when the fetcher refused an older Mac", () => {
+    expect(indexerPlatformNote("darwin", "x64", "22.6.0")).toMatch(/needs macOS 14 or later/);
+  });
+
+  it("expects the prebuilt binary on a supported platform", () => {
+    expect(indexerPlatformNote("darwin", "x64", "24.0.0")).toMatch(/Expected a prebuilt binary for darwin-x64/);
+  });
+
+  it("points at a source build where nothing is published", () => {
+    expect(indexerPlatformNote("win32", "x64", "10.0.22631")).toMatch(/No prebuilt binary is published for win32-x64/);
   });
 });
