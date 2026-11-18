@@ -5,17 +5,30 @@
 import { createHash } from "node:crypto";
 
 // MUST equal CORTEX_INDEXER_VERSION in src/indexer/version.ts (drift-guard test).
-export const FETCH_INDEXER_VERSION = "0.3.2";
+export const FETCH_INDEXER_VERSION = "0.3.6";
 
 // Mirror of SUPPORTED in src/indexer/version.ts (drift-guard test enforces it).
-// darwin-x64 intentionally absent — no prebuilt is published (macos-13 runners
-// no longer dispatch); Intel-Mac users build from source.
-const SUPPORTED = new Set(["darwin-arm64", "linux-x64", "linux-arm64"]);
+// Every entry must have a published asset in the pinned release.
+const SUPPORTED = new Set(["darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64"]);
 
 export function assetNameFor(platform, arch) {
   const key = `${platform}-${arch}`;
   if (!SUPPORTED.has(key)) return null;
   return `cortex-indexer-${FETCH_INDEXER_VERSION}-${key}.tar.gz`;
+}
+
+// Mirror of MIN_DARWIN_MAJOR in src/indexer/version.ts (drift-guard test enforces
+// it): Darwin 23 is macOS 14, the oldest macOS the prebuilt binaries start on.
+const MIN_DARWIN_MAJOR = 23;
+
+/** Why this machine cannot use the pinned prebuilt binary, or null when it can. */
+export function prebuiltUnavailableReason(platform, arch, osRelease) {
+  if (!assetNameFor(platform, arch)) return `no prebuilt asset for ${platform}-${arch}`;
+  const major = Number.parseInt(osRelease, 10);
+  if (platform === "darwin" && Number.isFinite(major) && major < MIN_DARWIN_MAJOR) {
+    return `the prebuilt indexer needs macOS 14 or later (this Mac runs Darwin ${osRelease})`;
+  }
+  return null;
 }
 
 export function sha256Hex(buf) {
@@ -24,7 +37,7 @@ export function sha256Hex(buf) {
 
 import { mkdirSync, writeFileSync, copyFileSync, chmodSync, existsSync, mkdtempSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { homedir, release } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -44,10 +57,11 @@ async function download(url) {
  * returns { installed:false, reason } so postinstall can warn and exit 0.
  */
 export async function fetchIndexer({ baseUrl = DEFAULT_BASE_URL, destDir, cacheDir } = {}) {
-  const asset = assetNameFor(process.platform, process.arch);
-  if (!asset) {
-    return { installed: false, reason: `no prebuilt asset for ${process.platform}-${process.arch}` };
+  const unavailable = prebuiltUnavailableReason(process.platform, process.arch, release());
+  if (unavailable) {
+    return { installed: false, reason: unavailable };
   }
+  const asset = assetNameFor(process.platform, process.arch);
   const base = `${baseUrl}/v${FETCH_INDEXER_VERSION}`;
   const cacheBin = join(cacheDir, FETCH_INDEXER_VERSION, `${process.platform}-${process.arch}`, "cortex-indexer");
   mkdirSync(destDir, { recursive: true });

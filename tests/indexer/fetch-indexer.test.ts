@@ -1,7 +1,13 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { assetNameFor, FETCH_INDEXER_VERSION, sha256Hex, fetchIndexer } from "../../scripts/fetch-indexer.mjs";
-import { CORTEX_INDEXER_VERSION, indexerAssetName } from "../../src/indexer/version.js";
+import {
+  assetNameFor,
+  FETCH_INDEXER_VERSION,
+  sha256Hex,
+  fetchIndexer,
+  prebuiltUnavailableReason,
+} from "../../scripts/fetch-indexer.mjs";
+import { CORTEX_INDEXER_VERSION, indexerAssetName, prebuiltNeedsNewerMacOS } from "../../src/indexer/version.js";
 import { createServer } from "node:http";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, chmodSync, readFileSync, rmSync } from "node:fs";
@@ -23,6 +29,17 @@ describe("fetch-indexer pure helpers", () => {
       expect(assetNameFor(p, a)).toBe(indexerAssetName(p, a));
     }
     expect(assetNameFor("win32", "x64")).toBeNull();
+  });
+
+  it("refuses the prebuilt binary below macOS 14, as src/indexer/version.ts does (drift guard)", () => {
+    for (const release of ["21.6.0", "22.6.0", "23.0.0", "25.6.0"]) {
+      const reason = prebuiltUnavailableReason("darwin", "x64", release);
+      expect(reason !== null).toBe(prebuiltNeedsNewerMacOS("darwin", release));
+    }
+    expect(prebuiltUnavailableReason("darwin", "x64", "22.6.0")).toMatch(/macOS 14 or later/);
+    expect(prebuiltUnavailableReason("darwin", "arm64", "23.1.0")).toBeNull();
+    expect(prebuiltUnavailableReason("linux", "x64", "6.1.0")).toBeNull();
+    expect(prebuiltUnavailableReason("win32", "x64", "10.0.22631")).toMatch(/no prebuilt asset for win32-x64/);
   });
 
   it("computes sha256 of a buffer", () => {

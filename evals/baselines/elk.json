@@ -1,34 +1,34 @@
 {
   "target": "elk",
-  "captured_at": "2026-08-28T22:43:38.141Z",
-  "source_sha": "ae4ebf3375eb68f1f355390b4f163adb10f5026c",
+  "captured_at": "2026-11-18T17:39:37.473Z",
+  "source_sha": "6b956a6d4a89a676059d83a0b0e59d7165d5f266",
   "nodes_by_label": {
     "class": 12,
-    "file": 470,
+    "file": 478,
     "folder": 88,
-    "function": 626,
+    "function": 628,
     "interface": 87,
     "method": 2,
-    "module": 476,
+    "module": 478,
     "project": 1,
     "route": 12,
     "section": 132,
     "type": 50,
-    "variable": 18382
+    "variable": 19020
   },
   "edges_by_type": {
-    "CALLS": 1052,
-    "CONFIGURES": 1059,
-    "CONTAINS_FILE": 476,
+    "CALLS": 967,
+    "CONFIGURES": 1063,
+    "CONTAINS_FILE": 478,
     "CONTAINS_FOLDER": 91,
-    "DEFINES": 19767,
+    "DEFINES": 20415,
     "DEFINES_METHOD": 2,
     "ENCLOSES": 95,
     "HANDLES": 7,
-    "IMPORTS": 48,
-    "SEMANTICALLY_RELATED": 14,
+    "IMPORTS": 49,
+    "SEMANTICALLY_RELATED": 15,
     "SIMILAR_TO": 10,
-    "USAGE": 141,
+    "USAGE": 146,
     "WRITES": 2
   },
   "per_assertion": {
@@ -38,18 +38,18 @@
     "composable_has_callers": 42,
     "pinia_store_node_exists": 0,
     "vue_function_node_count_nonzero": 214,
-    "vue_function_has_high_degree": 28,
+    "vue_function_has_high_degree": 20,
     "sfc_qn_well_formed": [
-      "Users-rka-Development-cortex-wt-eval-universal-evals-cache-elk-src.app.components.account.AccountMoreButton.shareAccount",
-      "Users-rka-Development-cortex-wt-eval-universal-evals-cache-elk-src.app.components.account.AccountMoreButton.toggleReblogs",
-      "Users-rka-Development-cortex-wt-eval-universal-evals-cache-elk-src.app.components.account.AccountMoreButton.addUserNote",
-      "Users-rka-Development-cortex-wt-eval-universal-evals-cache-elk-src.app.components.account.AccountMoreButton.removeUserNote",
-      "Users-rka-Development-cortex-wt-eval-universal-evals-cache-elk-src.app.components.nav.NavBottomMoreMenu.toggleVisible"
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.[[server]].lists.createList",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.[[server]].lists.clearError",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.[[server]].lists.updateEntry",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.[[server]].lists.removeEntry",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.settings.about.handleShowCommit"
     ],
     "vue_file_is_module_node": 264,
     "get_code_snippet_returns_vue_content": "Node found: app.vue",
     "governs_link_to_vue_path_persists": "governs persisted: 1",
-    "search_graph_finds_vue_component": "Found 602 matches",
+    "search_graph_finds_vue_component": "Found 610 matches",
     "nitro_handler_function_exists": 4,
     "nitro_route_handles_edge": 7,
     "no_tarball_routes": [],
@@ -58,7 +58,7 @@
     "decision_governs_edges_exist": 0,
     "decision_rationale_no_xml_leakage": [],
     "file_sourced_calls": 0,
-    "call_attribution_rate": 42.20532319391635,
+    "call_attribution_rate": 39.19338159255429,
     "qn_collisions": 0,
     "orphan_definition_rate": 0,
     "per_language_function_density": {
@@ -66,11 +66,15 @@
       "yaml": 0,
       "md": 0,
       "json": 0,
-      "vue": 0.8294573643410853,
-      "ts": 3.1846153846153844,
+      "vue": 0.8106060606060606,
+      "ts": 3.1755725190839694,
       "css": 0,
       "toml": 0,
       "js": 0
-    }
+    },
+    "guess_share": 1.2409513960703205,
+    "suspect_hub_share": 0,
+    "unscored_share": 0,
+    "quality_level": 0
   }
 }

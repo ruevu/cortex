@@ -3,7 +3,8 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import { accessSync, constants as fsConstants } from "node:fs";
-import { CORTEX_INDEXER_VERSION, indexerAssetName } from "./version.js";
+import { release } from "node:os";
+import { CORTEX_INDEXER_VERSION, indexerAssetName, prebuiltNeedsNewerMacOS } from "./version.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -20,12 +21,46 @@ export function resolveIndexerBinary(): string {
   return process.env.CORTEX_INDEXER_PATH || LOCAL_INDEXER;
 }
 
+/**
+ * What a missing binary means on this platform: a prebuilt one was expected,
+ * none is published, or the Mac is older than the macOS 14 the prebuilt
+ * binaries need (the fetcher skips the download there).
+ */
+export function indexerPlatformNote(platform: string, arch: string, osRelease: string): string {
+  if (!indexerAssetName(platform, arch)) {
+    return `No prebuilt binary is published for ${platform}-${arch}; build cortex-indexer from source.`;
+  }
+  if (prebuiltNeedsNewerMacOS(platform, osRelease)) {
+    return `The prebuilt binary needs macOS 14 or later; build cortex-indexer from source.`;
+  }
+  return `Expected a prebuilt binary for ${platform}-${arch}.`;
+}
+
+/**
+ * The error for a binary that exists but fails to run `--version`. Below
+ * macOS 14 that is the deployment target, not corruption, and reinstalling
+ * would fetch the same binary again, so the message names the requirement.
+ */
+export function indexerRunFailureMessage(
+  detail: string,
+  platform: string = process.platform,
+  osRelease: string = release(),
+): string {
+  if (prebuiltNeedsNewerMacOS(platform, osRelease)) {
+    return (
+      `cortex-indexer --version failed (${detail}). The prebuilt cortex-indexer needs ` +
+      `macOS 14 or later; build it from source and set CORTEX_INDEXER_PATH to the binary.`
+    );
+  }
+  return (
+    `cortex-indexer --version failed (${detail}). The binary may be corrupt; ` +
+    `run \`npm run fetch-indexer\` to reinstall the pinned version.`
+  );
+}
+
 export class IndexerNotInstalledError extends Error {
   constructor(binaryPath: string) {
-    const asset = indexerAssetName(process.platform, process.arch);
-    const platformNote = asset
-      ? `Expected a prebuilt binary for ${process.platform}-${process.arch}.`
-      : `No prebuilt binary is published for ${process.platform}-${process.arch}; build cortex-indexer from source.`;
+    const platformNote = indexerPlatformNote(process.platform, process.arch, release());
     super(
       `cortex-indexer not found at ${binaryPath}. ${platformNote} ` +
       `Run \`npm run fetch-indexer\`, or build it from the cortex-indexer repo and set CORTEX_INDEXER_PATH to the binary.`,
@@ -83,10 +118,7 @@ export async function ensureIndexer(opts: EnsureOpts = {}): Promise<string> {
       // spawn error, non-zero exit, or timeout. That's a broken binary, not a
       // legacy one — surface it rather than silently tolerating.
       const msg = e instanceof Error ? e.message : String(e);
-      throw new Error(
-        `cortex-indexer --version failed (${msg}). The binary may be corrupt; ` +
-        `run \`npm run fetch-indexer\` to reinstall the pinned version.`,
-      );
+      throw new Error(indexerRunFailureMessage(msg));
     }
     let reported: string | undefined;
     try {
