@@ -1,6 +1,6 @@
 {
   "target": "elk",
-  "captured_at": "2026-11-17T23:11:09.642Z",
+  "captured_at": "2026-11-18T17:39:37.473Z",
   "source_sha": "6b956a6d4a89a676059d83a0b0e59d7165d5f266",
   "nodes_by_label": {
     "class": 12,
@@ -18,7 +18,7 @@
   },
   "edges_by_type": {
     "CALLS": 967,
-    "CONFIGURES": 1050,
+    "CONFIGURES": 1063,
     "CONTAINS_FILE": 478,
     "CONTAINS_FOLDER": 91,
     "DEFINES": 20415,
@@ -26,7 +26,7 @@
     "ENCLOSES": 95,
     "HANDLES": 7,
     "IMPORTS": 49,
-    "SEMANTICALLY_RELATED": 16,
+    "SEMANTICALLY_RELATED": 15,
     "SIMILAR_TO": 10,
     "USAGE": 146,
     "WRITES": 2
@@ -38,13 +38,13 @@
     "composable_has_callers": 42,
     "pinia_store_node_exists": 0,
     "vue_function_node_count_nonzero": 214,
-    "vue_function_has_high_degree": 22,
+    "vue_function_has_high_degree": 20,
     "sfc_qn_well_formed": [
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.components.settings.SettingsBottomNav.isAdded",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.components.settings.SettingsBottomNav.append",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.components.settings.SettingsBottomNav.remove",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.components.settings.SettingsBottomNav.clear",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.components.settings.SettingsBottomNav.reset"
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.[[server]].lists.createList",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.[[server]].lists.clearError",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.[[server]].lists.updateEntry",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.[[server]].lists.removeEntry",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.settings.about.handleShowCommit"
     ],
     "vue_file_is_module_node": 264,
     "get_code_snippet_returns_vue_content": "Node found: app.vue",

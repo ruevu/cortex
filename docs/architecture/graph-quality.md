@@ -95,9 +95,9 @@ open-pencil shows why the hub rule exists. Its guess share alone would pass,
 but more than one call edge in seven runs through a function that a built-in
 method happens to share a name with.
 
-cortex-indexer 0.3.4 and 0.3.5 refuse those bindings at the source (decisions
+cortex-indexer 0.3.4 and later refuse those bindings at the source (decisions
 D-gfxr and D-12b9 in cortex-indexer). The same two, measured on 2026-11-17 with
-0.3.5:
+0.3.5 (0.3.6 indexes both trees to the same graph):
 
 | repository | call edges | name guesses | through suspect hubs | verdict |
 |---|---|---|---|---|
@@ -226,7 +226,7 @@ stack, `run` in a test helper, and `find` and `endsWith` in
 calls bound to the last two by name.
 
 Since 0.3.4 a member call no longer binds a repo function by name alone
-(D-gfxr), so those edges are gone: at the 0.3.5 pin, no call edge runs
+(D-gfxr), so those edges are gone: at the 0.3.6 pin, no call edge runs
 through a suspect hub. A helper named after a built-in method no longer
 collects `xs.find()` calls. A hub can still form through an imported root
 (`IMPORTED_LIST.map()`), which the rule exempts.

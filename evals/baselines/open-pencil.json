@@ -1,6 +1,6 @@
 {
   "target": "open-pencil",
-  "captured_at": "2026-11-17T23:11:20.759Z",
+  "captured_at": "2026-11-18T17:39:53.762Z",
   "source_sha": "73b2690ba26a3ec6876bb846c0fe677697b57fbe",
   "nodes_by_label": {
     "channel": 20,
@@ -21,15 +21,14 @@
   },
   "edges_by_type": {
     "CALLS": 66863,
-    "CONFIGURES": 776,
+    "CONFIGURES": 772,
     "CONTAINS_FILE": 8602,
     "CONTAINS_FOLDER": 1871,
     "DEFINES": 95479,
     "DEFINES_METHOD": 1525,
     "EMITS": 5,
     "ENCLOSES": 4826,
-    "FILE_CHANGES_WITH": 1,
-    "HANDLES": 13,
+    "HANDLES": 16,
     "HTTP_CALLS": 132,
     "IMPLEMENTS": 2,
     "IMPORTS": 20425,

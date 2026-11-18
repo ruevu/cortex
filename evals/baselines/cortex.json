@@ -1,6 +1,6 @@
 {
   "target": "cortex",
-  "captured_at": "2026-11-17T23:11:02.833Z",
+  "captured_at": "2026-11-18T17:39:31.045Z",
   "source_sha": "add6ed69f59334420802ab5aa8ab3cdad19973e6",
   "nodes_by_label": {
     "channel": 3,
@@ -30,7 +30,7 @@
     "IMPORTS": 1595,
     "LISTENS_ON": 5,
     "RAISES": 60,
-    "SEMANTICALLY_RELATED": 145,
+    "SEMANTICALLY_RELATED": 146,
     "SIMILAR_TO": 62,
     "USAGE": 348,
     "WRITES": 73

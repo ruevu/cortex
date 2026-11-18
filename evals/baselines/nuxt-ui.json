@@ -1,6 +1,6 @@
 {
   "target": "nuxt-ui",
-  "captured_at": "2026-11-17T23:11:06.671Z",
+  "captured_at": "2026-11-18T17:39:39.696Z",
   "source_sha": "9111197cb7f94d20df8e3d5dcdc57fdba0072cdd",
   "nodes_by_label": {
     "class": 5,
@@ -24,10 +24,10 @@
     "DEFINES": 12911,
     "DEFINES_METHOD": 19,
     "ENCLOSES": 335,
-    "HANDLES": 19,
+    "HANDLES": 18,
     "HTTP_CALLS": 38,
     "IMPORTS": 2174,
-    "SEMANTICALLY_RELATED": 13,
+    "SEMANTICALLY_RELATED": 12,
     "SIMILAR_TO": 46,
     "TESTS_FILE": 1,
     "THROWS": 1,
@@ -43,15 +43,15 @@
     "vue_function_node_count_nonzero": 725,
     "vue_function_has_high_degree": 43,
     "sfc_qn_well_formed": [
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.docs.app.components.content.examples.table.TableRowContextMenuEventExample.getRowItems",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.docs.app.components.content.examples.table.TableRowContextMenuEventExample.getRowItems.onSelect",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.docs.app.components.content.examples.table.TableRowContextMenuEventExample.onContextmenu",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.docs.app.components.content.examples.editor.EditorDragHandleDropdownMenuExample.items",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.docs.app.components.content.examples.table.TableRowSelectEventExample.onSelect"
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.src.runtime.components.content.ContentSearchButton.getProxySlots",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.src.runtime.components.Toggle.onUpdate",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.docs.app.components.content.examples.table.TableColumnSortingReusableExample.getHeader",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.docs.app.components.content.examples.chat.ChatPromptEditorExample.onSubmit",
+      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.playgrounds.nuxt.app.pages.components.sidebar.onError"
     ],
     "vue_file_is_module_node": 821,
     "nitro_handler_function_exists": 31,
-    "nitro_route_handles_edge": 19,
+    "nitro_route_handles_edge": 18,
     "no_tarball_routes": [],
     "no_codeartifact_routes": [],
     "decision_node_count_nonzero": 0,
