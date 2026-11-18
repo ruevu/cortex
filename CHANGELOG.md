@@ -18,7 +18,7 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
-## [2.4.12] — 2026-11-17
+## [2.4.12] — 2026-11-18
 
 > **Upgrading:** the build cache keys on the indexer version, so the first
 > index after upgrading is a full one, and TypeScript graphs change a lot.
@@ -26,7 +26,7 @@ All notable changes to Cortex are documented here. The format follows
 ### Changed
 
 - **The indexer is pinned to
-  [cortex-indexer 0.3.5](https://github.com/ruevu/cortex-indexer/releases/tag/v0.3.5)
+  [cortex-indexer 0.3.6](https://github.com/ruevu/cortex-indexer/releases/tag/v0.3.6)
   (was 0.3.2).**
   - **Imports resolve the way TypeScript resolves them:**
     - tsconfig/jsconfig `paths` and `baseUrl`, through `extends`;
@@ -52,6 +52,12 @@ All notable changes to Cortex are documented here. The format follows
 
     Imports of the module land on it. Indexers 0.3.3 and 0.3.4 picked by file
     path and got these wrong: on mesh, 78 code files had no module node.
+  - **A function keeps its name over the doc heading beside it** (0.3.6).
+    When `useThing/index.md` opens with `# useThing` beside the `index.ts`
+    that exports `useThing`, the two share a qualified name. Earlier indexers
+    could give it to the heading, so calls to the function landed on the
+    docs. On vueuse, which documents every composable this way, 956 of 1,757
+    call edges did under 0.3.5.
   - **Name guesses** in the graph-quality verdict, before → after:
     - this repo: 33.3% → 18.6%;
     - mesh: 30.0% → 18.8%;
@@ -82,16 +88,6 @@ All notable changes to Cortex are documented here. The format follows
 
 - **Intel Macs get a prebuilt indexer again** (`darwin-x64`), on macOS 14 or
   later.
-
-### Known issue
-
-- **A markdown heading can take the name of the function it documents.**
-  When `useThing/index.md` opens with `# useThing` beside the `index.ts` that
-  exports `useThing`, both share a qualified name. The heading keeps it, and
-  calls to the function land on the heading. On `vueuse`, which documents
-  every composable this way, 956 of 1,757 call edges land on a heading
-  (475 under 0.3.2, which had the same collision). None of the other
-  measured repos is affected.
 
 ## [2.4.11] — 2026-11-13
 
