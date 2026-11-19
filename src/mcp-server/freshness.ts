@@ -31,8 +31,15 @@ export function classifyFreshness(i: ClassifyInput): Freshness {
   if (!i.isGit) {
     return { state: "unknown", note: "not a git repository — freshness not tracked" };
   }
-  if (!i.meta || i.meta.indexed_commit == null) {
-    return { state: "unknown", indexed_at: i.meta?.indexed_at, note: "indexed before freshness tracking — reindex to enable" };
+  // No baseline at all = an index from before freshness tracking existed.
+  // A baseline whose indexed_commit is null is different: the index ran on an
+  // unborn branch (no commit yet), and null IS the HEAD it saw. It compares
+  // like any other baseline — fresh while HEAD stays unborn and the tree is
+  // unchanged, stale:commits once the first commit lands. Reading it as
+  // "unknown" made the SessionStart hook rebuild every session and never see
+  // the commits arrive (T-085p).
+  if (!i.meta) {
+    return { state: "unknown", note: "indexed before freshness tracking — reindex to enable" };
   }
   const headMoved = i.curHead !== i.meta.indexed_commit;
   const dirtyChanged = i.curDirtySig !== i.meta.indexed_dirty_sig;

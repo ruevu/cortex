@@ -104,7 +104,8 @@ no longer matches HEAD + working tree:
 - `stale:dirty` / `stale:commits` / `stale:both` — working tree or HEAD moved;
   re-index (don't fall back to grep).
 - `empty` — DB degraded/empty; re-index before trusting reads.
-- `unknown` — indexed before freshness tracking, or not a git repo.
+- `unknown` — indexed before freshness tracking, or not a git repo. (An index
+  built before the repo's first commit is tracked normally, not `unknown`.)
 
 See [graph-storage.md](architecture/graph-storage.md) for the freshness model.
 
