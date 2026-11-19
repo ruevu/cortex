@@ -225,7 +225,9 @@ export function kickBackgroundIndex(checkout: string): boolean {
     /* no sentinel — fall through and start one */
   }
 
-  const bin = process.env.CORTEX_BIN ?? "cortex";
+  // `||`, not `??`: an exported-but-empty CORTEX_BIN means "unset" (as it does
+  // to the hooks' resolver), not "spawn the empty string".
+  const bin = process.env.CORTEX_BIN || "cortex";
   const logPath = join(checkout, ".cortex", "auto-index.log");
   try {
     mkdirSync(join(checkout, ".cortex"), { recursive: true });

@@ -94,6 +94,14 @@ build + transactional-publish write path makes mid-session refresh safe. See
 [docs/architecture/graph-storage.md](docs/architecture/graph-storage.md).
 Gates: `CORTEX_FRESHNESS=0` (signal), `CORTEX_AUTO_REFRESH=0` (refresh).
 
+Auto-refresh needs a working CLI, and the hooks find it as `$CORTEX_BIN` →
+plugin `bin/cortex` → `PATH`, never the open repo's own `./bin/cortex`
+(`hooks/lib/resolve-cortex-bin.sh`; Mesh pins its sidecar through
+`CORTEX_BIN`). A `⚠ cortex CLI broken|unavailable` banner line, or
+`Index state: indexed (unverified — …)`, means **nothing is checking or
+refreshing the graph this session**: refresh with `index_repository`
+yourself, and tell the user so the CLI gets fixed.
+
 ### Source-drift signal — is this CHECKOUT current?
 
 Freshness answers "is the index current for this checkout?". It says nothing

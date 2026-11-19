@@ -45,9 +45,14 @@ if [ -f "$CACHE" ]; then grep -qxF "$REL" "$CACHE" 2>/dev/null || exit 0; fi
 # Already blocked once → let it through.
 [ -f "$BLOCKED" ] && grep -qxF "$REL" "$BLOCKED" 2>/dev/null && exit 0
 
-# Resolve the CLI (env override → PATH). No-op if unresolvable.
-BIN="${CORTEX_BIN:-}"
-[ -n "$BIN" ] || BIN="$(command -v cortex 2>/dev/null)"
+# Resolve the CLI through the resolver every hook shares ($CORTEX_BIN → plugin
+# root → PATH; hooks/lib/resolve-cortex-bin.sh). No-op if unresolvable.
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+[ -n "$HOOK_DIR" ] && [ -r "$HOOK_DIR/lib/resolve-cortex-bin.sh" ] || exit 0
+# shellcheck source=lib/resolve-cortex-bin.sh
+. "$HOOK_DIR/lib/resolve-cortex-bin.sh"
+resolve_cortex_bin
+BIN="$CORTEX_BIN_RESOLVED"
 [ -n "$BIN" ] || exit 0
 
 HEADLINE="$(cd "$ROOT" && "$BIN" brief "$REL" 2>/dev/null)"
