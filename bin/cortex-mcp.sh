@@ -44,6 +44,10 @@ cd "$ROOT"
 # better-sqlite3's index.js loads fine without the binding — the native `.node`
 # is lazy-loaded only when a Database is instantiated (lib/database.js), which
 # is exactly where boot crashes. A bare `require` probe would falsely pass.
+#
+# Under npm 12 the rebuild runs only because package.json's `allowScripts`
+# approves better-sqlite3; without that entry npm skips the install script
+# and still exits 0. bin/cortex carries the same heal for the CLI.
 if ! node -e 'new (require("better-sqlite3"))(":memory:").close()' >/dev/null 2>&1; then
   echo "cortex: better-sqlite3 native binding missing — rebuilding (one-time)…" >&2
   # Targeted: rebuild the native binding, or reinstall just this one package if

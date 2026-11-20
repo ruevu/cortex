@@ -12,6 +12,46 @@ while [ -L "$SRC" ]; do
 done
 ROOT="$(cd -P "$(dirname "$SRC")/.." && pwd)"
 export CORTEX_REPO_ROOT="$ROOT"
+
+# Native-binding self-heal — the CLI twin of bin/cortex-mcp.sh's (T-mskp).
+# Claude Code's directory-marketplace cache copies, and some git-installed
+# plugin copies, ship node_modules/better-sqlite3 WITHOUT its compiled `.node`,
+# so every command a hook runs (`cortex freshness`, `index`, `brief`) died on
+# "Could not locate the bindings file" while the MCP server, which heals, was
+# fine (T-085p).
+#
+# A file test, not cortex-mcp.sh's `new Database()` probe: hooks run this
+# launcher on every edit, and a node start per call is too dear for a path
+# that is cold once per copy. It cannot see an ABI mismatch (a binding built
+# for another Node) — that surfaces as the command's own error, which the
+# hooks now report rather than swallow.
+#
+# Everything here writes to stderr: hooks parse this command's stdout.
+# The mkdir lock keeps concurrent hooks on a fresh copy (SessionStart's probe,
+# the background auto-index, an edit briefing) from running two npm processes
+# on one tree; the loser skips the heal for this one call. Never fatal — a heal
+# that fails still execs, so the real startup error reaches the caller.
+#
+# The heal needs package.json's `allowScripts` entry for better-sqlite3: npm 12
+# blocks dependency install scripts without one — and that block is how
+# git-installed copies lost the binding in the first place. Blocked, npm still
+# exits 0, so success is judged by the binding file, never npm's exit code.
+BSQL="$ROOT/node_modules/better-sqlite3"
+BINDING="$BSQL/build/Release/better_sqlite3.node"
+if [ -d "$BSQL" ] && [ ! -e "$BINDING" ]; then
+  LOCK="$ROOT/node_modules/.cortex-binding-heal.lock"
+  if mkdir "$LOCK" 2>/dev/null; then
+    echo "cortex: better-sqlite3 native binding missing under $ROOT — rebuilding (one-time)…" >&2
+    # Targeted, as in cortex-mcp.sh: never a bare `npm install`, which would
+    # pull the whole devDependency tree into a plugin cache to fix one binding.
+    (cd "$ROOT" && { npm rebuild better-sqlite3 || npm install better-sqlite3 --no-save --omit=dev; }) 1>&2
+    if [ ! -e "$BINDING" ]; then
+      echo "cortex: could not rebuild the better-sqlite3 binding (npm may have blocked its install script — see package.json allowScripts); run \`npm rebuild better-sqlite3\` in $ROOT" >&2
+    fi
+    rmdir "$LOCK" 2>/dev/null
+  fi
+fi
+
 if [ -f "$ROOT/dist/cli/main.js" ]; then
   exec node "$ROOT/dist/cli/main.js" "$@"
 else

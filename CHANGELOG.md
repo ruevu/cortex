@@ -45,6 +45,20 @@ All notable changes to Cortex are documented here. The format follows
   `post-commit-refresh.sh` tells the agent when a refresh is skipped or fails
   instead of discarding the error. It stays quiet when it only lost the index
   lock to an index that was already running.
+- **Plugin copies build their `better-sqlite3` binding again.** npm 12 blocks
+  dependency install scripts unless `package.json` approves them, and still
+  exits 0. So a git install of the plugin under npm 12 got no native binding,
+  and every CLI command a hook ran died on "Could not locate the bindings file".
+  `bin/cortex-mcp.sh`'s one-time rebuild was blocked the same way, while
+  reporting success. `package.json` now declares `allowScripts` for
+  `better-sqlite3` and `esbuild`.
+- **`bin/cortex` repairs a missing binding itself.** The CLI launcher now does
+  the one-time rebuild the MCP launcher already did, for the directory-
+  marketplace cache copies that arrive without `build/`. It checks for the
+  binding file without starting Node, so hooks pay nothing once it is built. It
+  writes only to stderr, takes a lock so concurrent hooks don't run two npm
+  processes on one tree, and judges success by the binding file rather than
+  npm's exit code.
 - **An index built before the first commit is no longer `unknown`.** It records
   a null `indexed_commit`, which the freshness classifier read as "indexed
   before freshness tracking". SessionStart then rebuilt it every session, and
