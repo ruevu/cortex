@@ -278,6 +278,12 @@ returned **stale data with no signal** before this layer existed (see
   (true only when `graphDbPath === resolveCortexDbPath(...)`) plus a 0-node check
   yields **`empty`** — this is the verdict that makes the degraded *fallback*
   above **loud instead of silent**. No baseline / non-git → `unknown`.
+  A baseline whose `indexed_commit` is null is **not** "no baseline": the index
+  ran on an unborn branch (`git init`, no commit yet), and it compares like any
+  other — `fresh` while HEAD stays unborn and the tree is unchanged,
+  `stale:commits` once the first commit lands. (It used to read `unknown`,
+  which made the SessionStart hook rebuild every session and never notice the
+  commits arrive — T-085p.)
   Storing `indexed_dirty_sig` means indexing a dirty tree reads `fresh` (the
   graph reflects that state); only *further* edits flip it to stale.
 - **Surfacing.** `fresh` leaves results untouched; otherwise a
@@ -285,10 +291,34 @@ returned **stale data with no signal** before this layer existed (see
   `freshness` field is added. `cortex freshness` (CLI) prints the same verdict
   into the SessionStart banner; the banner's index detection uses `-s`
   (non-empty), so a 0-byte `.cortex/db` no longer reads as "indexed".
-- **Auto-refresh** runs **only out-of-band at SessionStart** (full index for
-  `empty`/`unknown`, incremental for `stale:*`) — never inside a read, because
-  incremental indexing is delete+recreate, not in-place
-  (see [known-limitations](known-limitations.md) + decision `bbf0fce5`).
+- **Auto-refresh** runs out-of-band at **SessionStart** (full index for
+  `empty`/`unknown`, incremental for `stale:*`) and **after every
+  `git commit`** (`hooks/post-commit-refresh.sh`, only on a checkout that
+  already has a graph, run from its root) — never inside a read. The
+  staging-build + transactional-publish write path is what makes the mid-session
+  refresh safe (decision `D-syde`; history in
+  [known-limitations](known-limitations.md)).
+- **Which CLI the hooks run.** Every hook resolves the CLI through
+  `hooks/lib/resolve-cortex-bin.sh`: `$CORTEX_BIN` → `$CLAUDE_PLUGIN_ROOT/bin/cortex`
+  → `cortex` on `PATH`, and **never** the open repo's `./bin/cortex`. An
+  exported `CORTEX_BIN` is authoritative — if it is not executable, resolution
+  fails rather than falling through — because an embedding host uses it to pin
+  its version: Mesh exports its bundled sidecar CLI there, and its plugin root
+  ships no `bin/cortex`. The repo-local fallback is gone because inside a
+  Cortex checkout it ran that checkout's code against the graph the pinned
+  sidecar serves, and outside one it found nothing.
+- **A broken CLI is loud.** The SessionStart freshness call doubles as a health
+  probe (`cortex freshness` exits 0 for every verdict): a non-zero exit or empty
+  output prints `⚠ cortex CLI broken: <first error line>` (or `unavailable`
+  when nothing resolves), marks the state `indexed (unverified — …)`, and stops
+  further CLI calls. With no store yet that probe can't open one, so the hook
+  instead reports the last background index's failure from
+  `.cortex/auto-index.log` (`⚠ cortex background index failed: …`; Chromium's
+  `[pid/ts:ERROR:…]` noise from Mesh's Electron-as-node CLI is ignored). The
+  post-commit refresh reports a skipped or failed refresh to the agent as
+  `additionalContext`, except a lost index lock (another index is already
+  publishing). Both used to swallow the failure, so a graph nothing could
+  refresh still read as a clean "indexed".
 
 Gates: `CORTEX_FRESHNESS=0` disables the signal; `CORTEX_AUTO_REFRESH=0` keeps
 the signal but disables auto-refresh.

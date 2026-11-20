@@ -18,6 +18,62 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.13] — 2026-11-19
+
+### Fixed
+
+- **Hooks now run the Cortex they were configured with, and never the open
+  repo's own `bin/cortex`.** `check-index.sh` and `post-commit-refresh.sh`
+  ignored an exported `CORTEX_BIN` and fell back to `./bin/cortex` in the
+  repo. Mesh exports its bundled sidecar CLI as `CORTEX_BIN`, and the sidecar
+  plugin ships no `bin/cortex`. So inside a Cortex checkout, a Mesh session ran
+  that checkout's code against the graph; anywhere else it ran no CLI at all.
+  All four CLI-calling hooks now share one resolver
+  (`hooks/lib/resolve-cortex-bin.sh`): `$CORTEX_BIN` → plugin `bin/cortex` →
+  `PATH`. A set-but-missing `CORTEX_BIN` fails instead of quietly falling
+  through to another copy. `brief-edit.sh` and `prefer-cortex.sh` gain the
+  plugin-root step, so a plugin install no longer needs `cortex` on `PATH` for
+  the edit-time briefing or the search gate's background index.
+- **A broken or missing CLI is loud.** The SessionStart freshness check used to
+  read a crash (for example a plugin copy missing its `better-sqlite3` binding)
+  as empty output. Empty output matched no refresh case, so the banner said a
+  clean "indexed" over a graph that nothing would ever refresh. It now prints
+  `⚠ cortex CLI broken: <first error line>` (or `unavailable`), reports
+  `Index state: indexed (unverified — …)`, and stops calling the CLI. On a
+  checkout with no store yet, a failed background index now shows up as
+  `⚠ cortex background index failed: …`, taken from `.cortex/auto-index.log`.
+  `post-commit-refresh.sh` tells the agent when a refresh is skipped or fails
+  instead of discarding the error. It stays quiet when it only lost the index
+  lock to an index that was already running.
+- **Plugin copies build their `better-sqlite3` binding again.** npm 12 blocks
+  dependency install scripts unless `package.json` approves them, and still
+  exits 0. So a git install of the plugin under npm 12 got no native binding,
+  and every CLI command a hook ran died on "Could not locate the bindings file".
+  `bin/cortex-mcp.sh`'s one-time rebuild was blocked the same way, while
+  reporting success. `package.json` now declares `allowScripts` for
+  `better-sqlite3` and `esbuild`.
+- **`bin/cortex` repairs a missing binding itself.** The CLI launcher now does
+  the one-time rebuild the MCP launcher already did, for the directory-
+  marketplace cache copies that arrive without `build/`. It checks for the
+  binding file without starting Node, so hooks pay nothing once it is built. It
+  writes only to stderr, takes a lock so concurrent hooks don't run two npm
+  processes on one tree, and judges success by the binding file rather than
+  npm's exit code.
+- **An index built before the first commit is no longer `unknown`.** It records
+  a null `indexed_commit`, which the freshness classifier read as "indexed
+  before freshness tracking". SessionStart then rebuilt it every session, and
+  the first real commits never showed up as stale. It now compares like any
+  other baseline: `fresh` until HEAD or the tree moves, then `stale:*`.
+
+### Changed
+
+- **The post-commit refresh only touches a checkout that already has a graph,
+  and runs from its root.** It used to run `cortex index` in the current
+  directory after every commit in any repo. In a repo that was never indexed,
+  that was a full first index that skipped the denylist, `CORTEX_AUTO_INDEX=0`
+  and the 60-minute sentinel. First indexes are left to the SessionStart and
+  search-gate auto-index paths, which apply all three.
+
 ## [2.4.12] — 2026-11-18
 
 > **Upgrading:** the build cache keys on the indexer version, so the first
@@ -3170,6 +3226,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.13]: https://github.com/ruevu/cortex/releases/tag/v2.4.13
 [2.4.12]: https://github.com/ruevu/cortex/releases/tag/v2.4.12
 [2.4.11]: https://github.com/ruevu/cortex/releases/tag/v2.4.11
 [2.4.10]: https://github.com/ruevu/cortex/releases/tag/v2.4.10

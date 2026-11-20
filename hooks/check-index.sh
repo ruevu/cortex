@@ -81,12 +81,29 @@ fi
 # (REPO is already resolved to the git root above when inside a git repo, so
 # no separate subdirectory walk-up is needed here anymore.)
 
-# Locate a cortex CLI for best-effort freshness / decision-count probes.
-CORTEX_BIN=""
-if [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -x "$CLAUDE_PLUGIN_ROOT/bin/cortex" ]; then
-    CORTEX_BIN="$CLAUDE_PLUGIN_ROOT/bin/cortex"
-elif [ -x "$REPO/bin/cortex" ]; then
-    CORTEX_BIN="$REPO/bin/cortex"
+# Locate the cortex CLI through the resolver every hook shares
+# (hooks/lib/resolve-cortex-bin.sh): $CORTEX_BIN → plugin root → PATH, never
+# the open repo's ./bin/cortex. CORTEX_CLI_PROBLEM collects why the CLI can't
+# be used — unresolvable here, or crashing on the freshness probe below — and
+# is printed as a loud banner line, because every signal this hook produces
+# (freshness, auto-refresh, briefing, staleness) silently vanishes without it.
+# (The resolver reads the inherited $CORTEX_BIN, so it runs BEFORE this script
+# reuses that name for the resolved path.)
+CORTEX_CLI_PROBLEM=""
+CORTEX_CLI_STATE=""
+if [ -n "$HOOK_DIR" ] && [ -r "$HOOK_DIR/lib/resolve-cortex-bin.sh" ]; then
+    # shellcheck source=lib/resolve-cortex-bin.sh
+    . "$HOOK_DIR/lib/resolve-cortex-bin.sh"
+    resolve_cortex_bin
+    CORTEX_BIN="$CORTEX_BIN_RESOLVED"
+    if [ -n "$CORTEX_BIN_PROBLEM" ]; then
+        CORTEX_CLI_PROBLEM="$CORTEX_BIN_PROBLEM"
+        CORTEX_CLI_STATE="unavailable"
+    fi
+else
+    CORTEX_BIN=""
+    CORTEX_CLI_PROBLEM="hooks/lib/resolve-cortex-bin.sh is missing from the plugin"
+    CORTEX_CLI_STATE="unavailable"
 fi
 
 # Unindexed checkout: kick a detached first index so strict reads have a store
@@ -100,6 +117,24 @@ fi
 # hooks/lib/auto-index-denylist.sh). An empty $AUTO_INDEX_DENYLIST_RE (shared
 # file unreadable) makes `grep -Eq ""` match unconditionally, so this reads as
 # denylisted and auto-index fails CLOSED rather than open.
+#
+# Before any retry overwrites it, read how the LAST background index ended.
+# A CLI that resolves but crashes (a plugin copy missing its native binding,
+# say) can't be caught by the freshness probe below on a checkout that has no
+# store yet — that probe never opens one — so its only trace is this log.
+# Reported when the log carries an error-shaped line and no `OK indexed`;
+# Chromium's own `[pid/ts:ERROR:…]` lines (Mesh's Electron-as-node CLI prints
+# one on every run) are not failures.
+AUTO_INDEX_PROBLEM=""
+if [ "$INDEX_STATE" = "not-indexed" ] && [ -s "$REPO/.cortex/auto-index.log" ]; then
+    AUTO_INDEX_PROBLEM="$(awk '
+        /^OK indexed/ { ok = 1 }
+        /^\[[0-9]+\/[0-9.]+:[A-Z]+:/ { next }
+        err == "" && (/(^|[^[:alpha:]])Error: / || /^ERROR:? /) { err = $0 }
+        END { if (!ok && err != "") { sub(/^[[:space:]]+/, "", err); print substr(err, 1, 200) } }
+    ' "$REPO/.cortex/auto-index.log" 2>/dev/null)"
+fi
+
 REPO_DENYLISTED=0
 printf '%s' "$REPO" | grep -Eq "$AUTO_INDEX_DENYLIST_RE" && REPO_DENYLISTED=1
 if [ "$INDEX_STATE" = "not-indexed" ] && [ -n "$CORTEX_BIN" ] && [ "${CORTEX_AUTO_INDEX:-1}" != "0" ] && [ -n "$GIT_ROOT" ] && [ "$REPO_DENYLISTED" != "1" ]; then
@@ -131,8 +166,33 @@ fi
 # snapshot with no reopen. `cortex index` auto-selects incremental when a
 # populated DB exists and a full reindex otherwise — one verb covers both the
 # empty/degraded and the stale cases. Gated by CORTEX_AUTO_REFRESH=0.
+#
+# The first freshness call doubles as the CLI health probe. It used to run as
+# `freshness 2>/dev/null | head -1`, so a crashing CLI (e.g. a plugin copy
+# missing its better-sqlite3 binding) produced empty output, the empty verdict
+# matched no refresh case, and the banner read a clean "indexed" over a graph
+# nothing would ever refresh (T-085p). `cortex freshness` exits 0 for every
+# verdict, so a non-zero exit or empty stdout means the CLI itself is broken:
+# record why, and drop CORTEX_BIN so nothing below calls it again.
 if [ "$INDEX_STATE" = "indexed" ] && [ -n "$CORTEX_BIN" ]; then
-    FRESHNESS="$(cd "$REPO" && "$CORTEX_BIN" freshness 2>/dev/null | head -1)"
+    # No predictable fallback path if mktemp fails: lose the error line
+    # (stderr → /dev/null) rather than write through a guessable /tmp name.
+    PROBE_ERR="$(mktemp 2>/dev/null)"
+    PROBE_OUT="$(cd "$REPO" && "$CORTEX_BIN" freshness 2>"${PROBE_ERR:-/dev/null}")"
+    PROBE_RC=$?
+    FRESHNESS="$(printf '%s\n' "$PROBE_OUT" | head -1)"
+    if [ "$PROBE_RC" -ne 0 ] || [ -z "$FRESHNESS" ]; then
+        PROBE_LINE=""
+        [ -n "$PROBE_ERR" ] && PROBE_LINE="$(cortex_first_error_line "$PROBE_ERR")"
+        [ -n "$PROBE_LINE" ] || PROBE_LINE="exited $PROBE_RC with no output"
+        CORTEX_CLI_PROBLEM="$PROBE_LINE ($CORTEX_BIN)"
+        CORTEX_CLI_STATE="broken"
+        CORTEX_BIN=""
+        FRESHNESS=""
+    fi
+    [ -n "$PROBE_ERR" ] && rm -f "$PROBE_ERR" 2>/dev/null
+fi
+if [ "$INDEX_STATE" = "indexed" ] && [ -n "$CORTEX_BIN" ]; then
     if [ "${CORTEX_AUTO_REFRESH:-1}" != "0" ]; then
         case "$FRESHNESS" in
             empty*|unknown*)
@@ -150,6 +210,11 @@ if [ "$INDEX_STATE" = "indexed" ] && [ -n "$CORTEX_BIN" ]; then
     if [ -n "$FRESHNESS" ] && [ "$FRESHNESS" != "fresh" ]; then
         INDEX_STATE="indexed ($FRESHNESS)"
     fi
+fi
+# A store exists, but with no working CLI nothing checked it — say so rather
+# than letting a bare "indexed" vouch for it.
+if [ "$INDEX_STATE" = "indexed" ] && [ -n "$CORTEX_CLI_PROBLEM" ]; then
+    INDEX_STATE="indexed (unverified — cortex CLI $CORTEX_CLI_STATE)"
 fi
 
 # SessionStart briefing setup: clear the stale per-session ledger and pre-build
@@ -188,6 +253,26 @@ cat <<EOF
 Repo: $REPO
 Repo path: $REPO
 Index state: $INDEX_STATE
+EOF
+
+if [ -n "$CORTEX_CLI_PROBLEM" ]; then
+    cat <<EOF
+⚠ cortex CLI $CORTEX_CLI_STATE: $CORTEX_CLI_PROBLEM
+  Session start could not check freshness, auto-index or refresh the graph,
+  or build the edit-briefing cache, so the graph may be stale with no warning.
+  Refresh it with index_repository(repo_path="$REPO"), and fix the CLI.
+EOF
+fi
+
+if [ -n "$AUTO_INDEX_PROBLEM" ]; then
+    cat <<EOF
+⚠ cortex background index failed: $AUTO_INDEX_PROBLEM
+  (last attempt, from .cortex/auto-index.log). Index with
+  index_repository(repo_path="$REPO"), and fix the CLI if the error names it.
+EOF
+fi
+
+cat <<EOF
 
 Cortex MCP tools require an absolute repo_path argument (except
 list_projects / delete_project). Use the Repo path above when calling

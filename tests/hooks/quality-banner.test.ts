@@ -34,6 +34,9 @@ function fakeCortex(root: string, out: string): void {
 function runHook(root: string): string {
   const env = { ...(process.env as Record<string, string>) };
   for (const k of ["CORTEX_BIN", "CLAUDE_PLUGIN_ROOT", "CORTEX_QUALITY"]) delete env[k];
+  // The stub lives at <root>/bin/cortex. The hook never runs a repo-local CLI
+  // (hooks/lib/resolve-cortex-bin.sh), so hand it over as the plugin root.
+  env.CLAUDE_PLUGIN_ROOT = root;
   env.CORTEX_AUTO_INDEX = "0";
   env.CORTEX_AUTO_REFRESH = "0";
   env.CORTEX_BRIEF = "0";

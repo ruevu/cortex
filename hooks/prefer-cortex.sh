@@ -154,8 +154,13 @@ maybe_bg_index() {
   [ "${CORTEX_AUTO_INDEX:-1}" = "0" ] && return 0
   printf '%s' "$root" | grep -Eq "$AUTO_INDEX_DENYLIST_RE" && return 0
 
-  local bin="${CORTEX_BIN:-}"
-  [ -n "$bin" ] || bin="$(command -v cortex 2>/dev/null)"
+  # The CLI comes from the resolver every hook shares ($CORTEX_BIN → plugin
+  # root → PATH; hooks/lib/resolve-cortex-bin.sh). Missing lib → skip.
+  [ -n "$HOOK_DIR" ] && [ -r "$HOOK_DIR/lib/resolve-cortex-bin.sh" ] || return 0
+  # shellcheck source=lib/resolve-cortex-bin.sh
+  . "$HOOK_DIR/lib/resolve-cortex-bin.sh"
+  resolve_cortex_bin
+  local bin="$CORTEX_BIN_RESOLVED"
   [ -n "$bin" ] || return 0
 
   local sentinel="$root/.cortex/.auto-index-attempted"

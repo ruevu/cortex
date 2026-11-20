@@ -1,6 +1,6 @@
 {
   "name": "cortex",
-  "version": "2.4.12",
+  "version": "2.4.13",
   "description": "Knowledge graph MCP server with decision provenance",
   "license": "Apache-2.0",
   "type": "module",
@@ -40,6 +40,10 @@
     "ulid": "^3.0.2",
     "ws": "^8.20.0",
     "zod": "^3.24.4"
+  },
+  "allowScripts": {
+    "better-sqlite3": true,
+    "esbuild": true
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

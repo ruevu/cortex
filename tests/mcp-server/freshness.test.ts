@@ -43,4 +43,25 @@ describe("classifyFreshness", () => {
     expect(f.state).toBe("stale:commits");
     expect(f.commits_behind).toBeUndefined();
   });
+
+  // An index built on an unborn branch (`git init`, no commit yet) records a
+  // baseline with indexed_commit = null. That is a TRACKED baseline, not a
+  // pre-tracking index: reading it as "unknown — indexed before freshness
+  // tracking" made check-index.sh rebuild on every session, forever, and never
+  // notice when the first commits landed.
+  describe("index built before the first commit", () => {
+    const unborn = { ...base, meta: { ...base.meta, indexed_commit: null }, commitsBehind: null };
+
+    it("fresh while there is still no commit and the tree is unchanged", () => {
+      expect(classifyFreshness({ ...unborn, curHead: null }).state).toBe("fresh");
+    });
+    it("stale:dirty while there is still no commit but the tree changed", () => {
+      expect(classifyFreshness({ ...unborn, curHead: null, curDirtySig: "other" }).state).toBe("stale:dirty");
+    });
+    it("stale:commits once the first commit lands", () => {
+      const f = classifyFreshness({ ...unborn, curHead: "AAA" });
+      expect(f.state).toBe("stale:commits");
+      expect(f.note).toMatch(/HEAD moved since index/);
+    });
+  });
 });

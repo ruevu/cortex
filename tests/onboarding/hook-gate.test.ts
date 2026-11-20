@@ -40,6 +40,9 @@ function runHook(repo: string, input: object, envOverrides: Record<string, strin
     encoding: "utf-8",
     env: {
       ...process.env,
+      // The stub lives at <repo>/bin/cortex; the hook never runs a repo-local
+      // CLI (hooks/lib/resolve-cortex-bin.sh), so it is passed as the plugin root.
+      CLAUDE_PLUGIN_ROOT: repo,
       CORTEX_AUTO_REFRESH: "0",
       CORTEX_BRIEF: "1",
       CORTEX_ONBOARD: "1",
@@ -123,8 +126,9 @@ function gitRepoWithoutIndex(): string {
   return repo;
 }
 
-/** Install a `bin/cortex` stub inside the repo (no CLAUDE_PLUGIN_ROOT needed —
- *  check-index.sh falls back to `$REPO/bin/cortex`). Records the auto-index
+/** Install a `bin/cortex` stub inside the repo, which runCheckIndexHook passes
+ *  as CLAUDE_PLUGIN_ROOT (the hook no longer falls back to a repo-local
+ *  `$REPO/bin/cortex`). Records the auto-index
  *  invocation (`index . <path>` — distinct from the unconditional `index
  *  sweep` GC call the script also makes, which must NOT clobber the same
  *  marker) to `${markerPath}.args` and touches `markerPath`. */
@@ -156,7 +160,7 @@ function runCheckIndexHook(repo: string, envOverrides: Record<string, string> = 
   const res = spawnSync("bash", [HOOK], {
     cwd: repo,
     encoding: "utf-8",
-    env: { ...process.env, CORTEX_AUTO_REFRESH: "0", CORTEX_BRIEF: "1", CORTEX_ONBOARD: "1", ...envOverrides },
+    env: { ...process.env, CLAUDE_PLUGIN_ROOT: repo, CORTEX_AUTO_REFRESH: "0", CORTEX_BRIEF: "1", CORTEX_ONBOARD: "1", ...envOverrides },
   });
   return { stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
 }
@@ -211,7 +215,8 @@ describe("check-index.sh — auto-index an unindexed checkout", () => {
     const marker = join(repo, ".index-fired");
     installIndexStub(repo, marker);
 
-    const out = runCheckIndexHook(subdir);
+    // cwd is the subdirectory; the stub's plugin root is still the checkout.
+    const out = runCheckIndexHook(subdir, { CLAUDE_PLUGIN_ROOT: repo });
 
     expect(out.stderr).toMatch(/indexing/i);
     // Sentinel lands at the checkout root, not the subdirectory.

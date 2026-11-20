@@ -10,6 +10,12 @@ export default defineConfig({
       // machine without a venv it turned every index-path test into a
       // timeout. Tests that exercise provisioning delete this themselves.
       CORTEX_FRAMES_SETUP: "0",
+      // Mesh exports CORTEX_BIN (its bundled sidecar CLI) into every agent
+      // shell, and the hooks honour it ahead of everything else
+      // (hooks/lib/resolve-cortex-bin.sh). Inherited, it would route every
+      // hook test that spreads process.env into the real sidecar instead of
+      // the test's stub. Empty reads as unset; tests that need it set it.
+      CORTEX_BIN: "",
     },
     exclude: [
       "**/node_modules/**",

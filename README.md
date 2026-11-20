@@ -168,8 +168,11 @@ rm -rf ~/.claude/plugins/cache/ruevu/cortex/<old-ver>
 
 The native addon wasn't compiled for your platform. **As of 1.4.8,
 `bin/cortex-mcp.sh` detects a missing binding on boot and rebuilds it once
-automatically** (logged to stderr, never fatal) — so this usually resolves itself
-on the next launch. If it persists, rebuild in place, in the directory the
+automatically** (logged to stderr, never fatal), and **as of 2.4.13 the CLI
+launcher `bin/cortex` does the same** — so this usually resolves itself on the
+next launch. Under npm 12 the rebuild needs `package.json`'s `allowScripts`
+entry for `better-sqlite3` (present from 2.4.13): without one npm skips the
+install script and still reports success. If it persists, rebuild in place, in the directory the
 launcher actually runs from (see the source-vs-cache note above):
 
 ```bash
