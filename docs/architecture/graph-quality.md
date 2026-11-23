@@ -96,16 +96,20 @@ but more than one call edge in seven runs through a function that a built-in
 method happens to share a name with.
 
 cortex-indexer 0.3.4 and later refuse those bindings at the source (decisions
-D-gfxr and D-12b9 in cortex-indexer). The same two, measured on 2026-11-17 with
-0.3.5 (0.3.6 indexes both trees to the same graph):
+D-gfxr and D-12b9 in cortex-indexer). 0.3.7 also refuses a call to a name
+imported from a package (D-rrv3). The same two, measured on 2026-11-24 with
+0.3.7:
 
 | repository | call edges | name guesses | through suspect hubs | verdict |
 |---|---|---|---|---|
-| cortex (v2.4.10, the self suite's pin) | 3,437 | 18.6% | none | `ok` |
-| open-pencil (`73b2690b`, a newer tree) | 66,863 | 39.4% | 0.9% | `ok` |
+| cortex (v2.4.10, the self suite's pin) | 3,400 | 17.6% | none | `ok` |
+| open-pencil (`73b2690b`, a newer tree) | 60,969 | 34.6% | 0.9% | `ok` |
+
+On 0.3.5 and 0.3.6 the same trees read 3,437 / 18.6% and 66,863 / 39.4%.
 
 The thresholds are unchanged. open-pencil is now `ok` because its hub share
-fell from 15.3% to 0.9%; its guess share sits just under the 40% line.
+fell from 15.3% to 0.9%. Its guess share sat just under the 40% line until
+0.3.7.
 
 ## Where it shows
 
@@ -226,7 +230,7 @@ stack, `run` in a test helper, and `find` and `endsWith` in
 calls bound to the last two by name.
 
 Since 0.3.4 a member call no longer binds a repo function by name alone
-(D-gfxr), so those edges are gone: at the 0.3.6 pin, no call edge runs
+(D-gfxr), so those edges are gone: at the 0.3.7 pin, no call edge runs
 through a suspect hub. A helper named after a built-in method no longer
 collects `xs.find()` calls. A hub can still form through an imported root
 (`IMPORTED_LIST.map()`), which the rule exempts.

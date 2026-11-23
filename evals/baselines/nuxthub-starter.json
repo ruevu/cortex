@@ -1,12 +1,12 @@
 {
   "target": "nuxthub-starter",
-  "captured_at": "2026-11-18T17:39:40.998Z",
+  "captured_at": "2026-11-23T23:03:01.964Z",
   "source_sha": "edd6f104e2eaadad93e5b214bac2195c7e95682d",
   "nodes_by_label": {
-    "file": 24,
+    "file": 25,
     "folder": 15,
     "function": 15,
-    "module": 24,
+    "module": 25,
     "project": 1,
     "route": 12,
     "section": 8,
@@ -14,9 +14,9 @@
   },
   "edges_by_type": {
     "CALLS": 6,
-    "CONTAINS_FILE": 24,
+    "CONTAINS_FILE": 25,
     "CONTAINS_FOLDER": 12,
-    "DEFINES": 89,
+    "DEFINES": 90,
     "HANDLES": 9,
     "HTTP_CALLS": 7
   },
@@ -29,11 +29,11 @@
     "vue_function_node_count_nonzero": 6,
     "vue_function_has_high_degree": 0,
     "sfc_qn_well_formed": [
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxthub-starter-src.app.components.ImageGallery.uploadImage",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxthub-starter-src.app.components.ImageGallery.deleteImage",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxthub-starter-src.app.components.MessagesPanel.sendMessage",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxthub-starter-src.app.components.MessagesPanel.deleteMessage",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxthub-starter-src.app.components.MessagesPanel.updateMessage"
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-nuxthub-starter-src.app.components.ImageGallery.uploadImage",
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-nuxthub-starter-src.app.components.ImageGallery.deleteImage",
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-nuxthub-starter-src.app.components.MessagesPanel.sendMessage",
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-nuxthub-starter-src.app.components.MessagesPanel.deleteMessage",
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-nuxthub-starter-src.app.components.MessagesPanel.updateMessage"
     ],
     "vue_file_is_module_node": 5,
     "nitro_handler_function_exists": 9,
@@ -50,6 +50,7 @@
     "per_language_function_density": {
       "md": 0,
       "vue": 1.2,
+      "mjs": 0,
       "ts": 0.6428571428571429,
       "yaml": 0,
       "sql": 0,

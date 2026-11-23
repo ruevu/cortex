@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 
 // MUST equal CORTEX_INDEXER_VERSION in src/indexer/version.ts (drift-guard test).
-export const FETCH_INDEXER_VERSION = "0.3.6";
+export const FETCH_INDEXER_VERSION = "0.3.7";
 
 // Mirror of SUPPORTED in src/indexer/version.ts (drift-guard test enforces it).
 // Every entry must have a published asset in the pinned release.

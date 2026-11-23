@@ -1,6 +1,6 @@
 {
   "target": "open-pencil",
-  "captured_at": "2026-11-18T17:39:53.762Z",
+  "captured_at": "2026-11-23T23:03:13.732Z",
   "source_sha": "73b2690ba26a3ec6876bb846c0fe677697b57fbe",
   "nodes_by_label": {
     "channel": 20,
@@ -20,19 +20,20 @@
     "variable": 51536
   },
   "edges_by_type": {
-    "CALLS": 66863,
-    "CONFIGURES": 772,
+    "CALLS": 60969,
+    "CONFIGURES": 583,
     "CONTAINS_FILE": 8602,
     "CONTAINS_FOLDER": 1871,
     "DEFINES": 95479,
     "DEFINES_METHOD": 1525,
-    "EMITS": 5,
+    "EMITS": 4,
     "ENCLOSES": 4826,
+    "FILE_CHANGES_WITH": 1,
     "HANDLES": 16,
     "HTTP_CALLS": 132,
     "IMPLEMENTS": 2,
     "IMPORTS": 20425,
-    "LISTENS_ON": 29,
+    "LISTENS_ON": 28,
     "RAISES": 413,
     "SEMANTICALLY_RELATED": 9,
     "SIMILAR_TO": 470,
@@ -44,7 +45,7 @@
   },
   "per_assertion": {
     "file_sourced_calls": 4,
-    "call_attribution_rate": 59.14332291401821,
+    "call_attribution_rate": 63.17308796273516,
     "qn_collisions": 0,
     "orphan_definition_rate": 0,
     "per_language_function_density": {
@@ -64,9 +65,9 @@
       "css": 0,
       "sql": 0
     },
-    "guess_share": 39.43586138821172,
-    "suspect_hub_share": 0.8614629914900618,
-    "unscored_share": 0.3155706444520886,
+    "guess_share": 34.55198543522118,
+    "suspect_hub_share": 0.9447424100772523,
+    "unscored_share": 0.3460775148026046,
     "quality_level": 0
   }
 }

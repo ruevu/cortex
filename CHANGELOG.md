@@ -18,6 +18,46 @@ All notable changes to Cortex are documented here. The format follows
 > [`ruevu/cortex-indexer`](https://github.com/ruevu/cortex-indexer) release and
 > stays as-is — it is not part of this repository's version line.
 
+## [2.4.14] — 2026-11-24
+
+> **Upgrading:** the build cache keys on the indexer version, so the first
+> index after upgrading is a full one.
+
+### Changed
+
+- **The indexer is pinned to
+  [cortex-indexer 0.3.7](https://github.com/ruevu/cortex-indexer/releases/tag/v0.3.7)
+  (was 0.3.6).**
+  - **A call to a name imported from a package no longer lands on a project
+    function.** `render()` imported from `@testing-library/react` used to bind
+    to the repo's own `render` by name. In JS/TS, a name-only guess is now
+    refused when every import of the name comes from the runtime (`node:`,
+    `bun:`, a Node built-in) or from a dependency some `package.json` takes
+    from outside the tree. Anything else, aliases included, keeps its edge.
+    Across seven measured repos, 7,624 such guesses go; on this repo, 61.
+  - **`.mjs`, `.cjs`, `.mts` and `.cts` files are indexed.** They were
+    dropped before, so this repo's `scripts/*.mjs` (`fetch-indexer`,
+    `check-release-consistency` and others) were missing from the graph.
+  - **Cortex's own state is never indexed:** `.cortex/`, `cortex.json` at the
+    repo root or beside `.cortex/`, `.superpowers/` and `.playwright-mcp/`. A
+    repo whose `.gitignore` didn't list `.cortex/` had `staleness.json` in its
+    graph. A `cortex.json` elsewhere, such as `evals/baselines/cortex.json`,
+    stays.
+- **The eval baselines are recaptured on 0.3.7**, at the same target commits
+  as the 0.3.6 capture. Call edges and `guess_share`, before → after:
+  - `cortex`: 3,437 → 3,400, 18.6% → 17.6%;
+  - `open-pencil`: 66,863 → 60,969, 39.4% → 34.6%;
+  - `trpc`: 6,887 → 6,682, 33.1% → 31.1%;
+  - `nuxt-ui`: 2,695 → 2,584, 23.4% → 19.2%;
+  - `vueuse`: 1,757 → 1,711, 22.3% → 20.5%;
+  - `elk`: 967 → 965; `nuxthub-starter` gains one `.mjs` module.
+
+  On `cortex`, `call_attribution_rate` dips (59.21 → 59.09). It is the share
+  of call edges made inside a function or method, and the refused guesses were
+  mostly made inside functions. CONFIGURES and a few other relations vary
+  between runs of the same binary on the same tree: open-pencil's CONFIGURES
+  read 597 and 583 in two 0.3.7 runs.
+
 ## [2.4.13] — 2026-11-19
 
 ### Fixed
@@ -3226,6 +3266,7 @@ placement, record drawer for TODOs) are deferred to 0.8.5.
 - **Floating-entity placement** of post-reclamation residual nodes + aggregates.
 - **Record drawer adoption for TODOs** (the drawer already ships for decisions).
 
+[2.4.14]: https://github.com/ruevu/cortex/releases/tag/v2.4.14
 [2.4.13]: https://github.com/ruevu/cortex/releases/tag/v2.4.13
 [2.4.12]: https://github.com/ruevu/cortex/releases/tag/v2.4.12
 [2.4.11]: https://github.com/ruevu/cortex/releases/tag/v2.4.11

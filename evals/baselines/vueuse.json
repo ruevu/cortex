@@ -1,6 +1,6 @@
 {
   "target": "vueuse",
-  "captured_at": "2026-11-18T17:39:35.345Z",
+  "captured_at": "2026-11-23T23:03:18.252Z",
   "source_sha": "bed1dce149ce6760fec13d4798c047f51a563180",
   "nodes_by_label": {
     "class": 17,
@@ -17,8 +17,8 @@
     "variable": 1612
   },
   "edges_by_type": {
-    "CALLS": 1757,
-    "CONFIGURES": 1158,
+    "CALLS": 1711,
+    "CONFIGURES": 1190,
     "CONTAINS_FILE": 1529,
     "CONTAINS_FOLDER": 326,
     "DEFINES": 8963,
@@ -27,7 +27,7 @@
     "FILE_CHANGES_WITH": 4,
     "HTTP_CALLS": 3,
     "IMPORTS": 1249,
-    "SEMANTICALLY_RELATED": 14,
+    "SEMANTICALLY_RELATED": 15,
     "SIMILAR_TO": 19,
     "TESTS": 6,
     "TESTS_FILE": 131,
@@ -36,7 +36,7 @@
   },
   "per_assertion": {
     "file_sourced_calls": 0,
-    "call_attribution_rate": 48.77632327831531,
+    "call_attribution_rate": 49.56165984804208,
     "qn_collisions": 0,
     "orphan_definition_rate": 0,
     "per_language_function_density": {
@@ -52,7 +52,7 @@
       "sh": 0,
       "html": 0
     },
-    "guess_share": 22.31075697211155,
+    "guess_share": 20.455873758036237,
     "suspect_hub_share": 0,
     "unscored_share": 0,
     "quality_level": 0

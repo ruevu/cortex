@@ -1,15 +1,15 @@
 {
   "target": "elk",
-  "captured_at": "2026-11-18T17:39:37.473Z",
+  "captured_at": "2026-11-23T23:02:58.308Z",
   "source_sha": "6b956a6d4a89a676059d83a0b0e59d7165d5f266",
   "nodes_by_label": {
     "class": 12,
-    "file": 478,
-    "folder": 88,
-    "function": 628,
+    "file": 479,
+    "folder": 89,
+    "function": 629,
     "interface": 87,
     "method": 2,
-    "module": 478,
+    "module": 479,
     "project": 1,
     "route": 12,
     "section": 132,
@@ -17,11 +17,11 @@
     "variable": 19020
   },
   "edges_by_type": {
-    "CALLS": 967,
-    "CONFIGURES": 1063,
-    "CONTAINS_FILE": 478,
-    "CONTAINS_FOLDER": 91,
-    "DEFINES": 20415,
+    "CALLS": 965,
+    "CONFIGURES": 1083,
+    "CONTAINS_FILE": 479,
+    "CONTAINS_FOLDER": 92,
+    "DEFINES": 20417,
     "DEFINES_METHOD": 2,
     "ENCLOSES": 95,
     "HANDLES": 7,
@@ -38,13 +38,13 @@
     "composable_has_callers": 42,
     "pinia_store_node_exists": 0,
     "vue_function_node_count_nonzero": 214,
-    "vue_function_has_high_degree": 20,
+    "vue_function_has_high_degree": 22,
     "sfc_qn_well_formed": [
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.[[server]].lists.createList",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.[[server]].lists.clearError",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.[[server]].lists.updateEntry",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.[[server]].lists.removeEntry",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-elk-src.app.pages.settings.about.handleShowCommit"
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-elk-src.app.components.account.AccountMoreButton.shareAccount",
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-elk-src.app.components.account.AccountMoreButton.toggleReblogs",
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-elk-src.app.components.account.AccountMoreButton.addUserNote",
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-elk-src.app.components.account.AccountMoreButton.removeUserNote",
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-elk-src.app.components.nav.NavBottomMoreMenu.toggleVisible"
     ],
     "vue_file_is_module_node": 264,
     "get_code_snippet_returns_vue_content": "Node found: app.vue",
@@ -58,7 +58,7 @@
     "decision_governs_edges_exist": 0,
     "decision_rationale_no_xml_leakage": [],
     "file_sourced_calls": 0,
-    "call_attribution_rate": 39.19338159255429,
+    "call_attribution_rate": 38.96373056994819,
     "qn_collisions": 0,
     "orphan_definition_rate": 0,
     "per_language_function_density": {
@@ -70,9 +70,10 @@
       "ts": 3.1755725190839694,
       "css": 0,
       "toml": 0,
-      "js": 0
+      "js": 0,
+      "mjs": 1
     },
-    "guess_share": 1.2409513960703205,
+    "guess_share": 1.2435233160621761,
     "suspect_hub_share": 0,
     "unscored_share": 0,
     "quality_level": 0

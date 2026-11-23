@@ -1,38 +1,38 @@
 {
   "target": "nuxt-ui",
-  "captured_at": "2026-11-18T17:39:39.696Z",
+  "captured_at": "2026-11-23T23:03:00.567Z",
   "source_sha": "9111197cb7f94d20df8e3d5dcdc57fdba0072cdd",
   "nodes_by_label": {
     "class": 5,
-    "file": 1740,
-    "folder": 234,
-    "function": 1628,
+    "file": 1750,
+    "folder": 237,
+    "function": 1661,
     "interface": 504,
     "method": 19,
-    "module": 1738,
+    "module": 1748,
     "project": 1,
     "route": 184,
     "section": 3752,
     "type": 597,
-    "variable": 4666
+    "variable": 4683
   },
   "edges_by_type": {
-    "CALLS": 2695,
+    "CALLS": 2584,
     "CONFIGURES": 1,
-    "CONTAINS_FILE": 1740,
-    "CONTAINS_FOLDER": 214,
-    "DEFINES": 12911,
+    "CONTAINS_FILE": 1750,
+    "CONTAINS_FOLDER": 217,
+    "DEFINES": 12971,
     "DEFINES_METHOD": 19,
-    "ENCLOSES": 335,
+    "ENCLOSES": 347,
     "HANDLES": 18,
     "HTTP_CALLS": 38,
-    "IMPORTS": 2174,
-    "SEMANTICALLY_RELATED": 12,
+    "IMPORTS": 2180,
+    "SEMANTICALLY_RELATED": 11,
     "SIMILAR_TO": 46,
     "TESTS_FILE": 1,
     "THROWS": 1,
-    "USAGE": 831,
-    "WRITES": 8
+    "USAGE": 1019,
+    "WRITES": 10
   },
   "per_assertion": {
     "http_calls_edge_count_nonzero": 38,
@@ -43,11 +43,11 @@
     "vue_function_node_count_nonzero": 725,
     "vue_function_has_high_degree": 43,
     "sfc_qn_well_formed": [
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.src.runtime.components.content.ContentSearchButton.getProxySlots",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.src.runtime.components.Toggle.onUpdate",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.docs.app.components.content.examples.table.TableColumnSortingReusableExample.getHeader",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.docs.app.components.content.examples.chat.ChatPromptEditorExample.onSubmit",
-      "Users-Rasmus-Development-cortex-wt-indexer-034-evals-.cache-nuxt-ui-src.playgrounds.nuxt.app.pages.components.sidebar.onError"
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-nuxt-ui-src.playgrounds.nuxt.app.pages.components.alert.actions",
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-nuxt-ui-src.playgrounds.nuxt.app.pages.components.alert.actions.onClick",
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-nuxt-ui-src.playgrounds.nuxt.app.pages.components.alert.multipleActions",
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-nuxt-ui-src.playgrounds.nuxt.app.pages.components.alert.multipleActions.onClick",
+      "Users-Rasmus-Development-cortex-wt-indexer-037-evals-.cache-nuxt-ui-src.docs.app.components.content.prose.CodeTreeIntersection.findCodeBlock"
     ],
     "vue_file_is_module_node": 821,
     "nitro_handler_function_exists": 31,
@@ -58,7 +58,7 @@
     "decision_governs_edges_exist": 0,
     "decision_rationale_no_xml_leakage": [],
     "file_sourced_calls": 0,
-    "call_attribution_rate": 26.753246753246753,
+    "call_attribution_rate": 27.979876160990713,
     "qn_collisions": 0,
     "orphan_definition_rate": 0,
     "per_language_function_density": {
@@ -66,6 +66,7 @@
       "md": 0,
       "json": 0,
       "ts": 1.435257410296412,
+      "mjs": 3.3,
       "vue": 0.8830694275274056,
       "css": 0,
       "js": 2,
@@ -73,9 +74,9 @@
       "yaml": 0,
       "sh": 0
     },
-    "guess_share": 23.413729128014843,
+    "guess_share": 19.23374613003096,
     "suspect_hub_share": 0,
-    "unscored_share": 0.07421150278293136,
+    "unscored_share": 0.07739938080495357,
     "quality_level": 0
   }
 }
